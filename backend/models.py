@@ -1,0 +1,82 @@
+"""
+Data models for the Paint By Number Generator.
+Defines core data structures used throughout the processing pipeline.
+"""
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, Dict, List, Set, Tuple
+import numpy as np
+from shapely.geometry import Polygon, Point, LineString
+import networkx as nx
+
+
+@dataclass
+class ProcessingJob:
+    """Represents a single image processing job."""
+    job_id: str
+    status: str  # "processing" | "complete" | "failed"
+    input_path: str
+    output_svg: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime = None
+    
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
+
+
+@dataclass
+class ProcessingParameters:
+    """Parameters for image processing."""
+    num_colors: Optional[int] = None  # None for auto-detection
+    simplification: float = 1.0       # 0.5-2.0 pixel tolerance
+    use_watershed: bool = False       # Whether to use watershed segmentation (slower but original spec)
+
+    def __post_init__(self):
+        # Validate simplification range
+        if not (0.5 <= self.simplification <= 2.0):
+            raise ValueError("Simplification must be between 0.5 and 2.0")
+
+
+@dataclass
+class ImageMetadata:
+    """Metadata about the input image."""
+    width: int
+    height: int
+    channels: int
+    file_size: int
+    image_type: str  # "portrait" | "landscape"
+
+
+@dataclass
+class ColorPalette:
+    """Color palette information."""
+    colors: np.ndarray      # LAB color values
+    hex_colors: List[str]   # Hex representation for SVG
+    color_count: int
+
+
+@dataclass
+class RegionData:
+    """Data about segmented regions."""
+    regions: Dict[int, Polygon]                    # Region ID -> Polygon
+    shared_borders: Dict[int, List[LineString]]    # Shared border segments
+    adjacency_graph: nx.Graph                      # Region adjacency
+
+
+@dataclass
+class LabelData:
+    """Data about label placement."""
+    positions: Dict[int, Point]  # Region ID -> Label position
+    font_sizes: Dict[int, int]   # Region ID -> Font size
+    skipped_regions: Set[int]    # Regions too small for labels
+
+
+@dataclass
+class SVGResult:
+    """Final SVG generation result."""
+    svg_content: str
+    color_palette: ColorPalette
+    processing_time: float
+    region_count: int
+    label_count: int

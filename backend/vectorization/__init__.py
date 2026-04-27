@@ -1,0 +1,1 @@
+# Polygon vectorization module

@@ -1,0 +1,456 @@
+"""
+Region segmentation module implementing watershed transform and shared border segmentation.
+"""
+import cv2
+import numpy as np
+from typing import Dict, List
+from shapely.geometry import LineString
+import networkx as nx
+from scipy import ndimage
+
+from ..models import RegionData
+
+
+class RegionSegmenter:
+    """
+    Implements region segmentation using watershed transform and the novel
+    Shared Border Segmentation algorithm to eliminate gaps between regions.
+    """
+    
+    def __init__(self, use_watershed: bool = False):
+        """
+        Initialize segmenter with configuration options.
+
+        Args:
+            use_watershed: Whether to use watershed transform (default: False)
+                          When False, uses direct color-based segmentation for better performance
+                          When True, uses watershed with cluster centers as markers (original spec)
+        """
+        self.min_distance = 10  # Minimum distance for peak detection
+        self.use_watershed = use_watershed
+    
+    def watershed_transform(self, quantized: np.ndarray, markers: np.ndarray) -> np.ndarray:
+        """
+        Apply watershed segmentation with cluster centers as markers.
+        
+        Args:
+            quantized: Quantized image (BGR format)
+            markers: Marker image with labeled regions
+            
+        Returns:
+            Segmented regions as labeled image
+        """
+        # Convert to grayscale for gradient calculation
+        gray = cv2.cvtColor(quantized, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate gradient magnitude
+        gradient = cv2.morphologyEx(gray, cv2.MORPH_GRADIENT, 
+                                    cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+        
+        # Apply watershed
+        markers_copy = markers.copy()
+        cv2.watershed(quantized, markers_copy)
+        
+        # Watershed marks boundaries as -1, convert to 0
+        markers_copy[markers_copy == -1] = 0
+        
+        return markers_copy.astype(np.int32)
+    def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> np.ndarray:
+            """
+            Direct color-based segmentation following pbnify's approach.
+            """
+            h, w = quantized.shape[:2]
+
+            # Step 1: Convert quantized BGR image to color ID matrix
+            color_id_matrix = self._create_color_id_matrix(quantized, colors)
+
+            # Step 2: Apply vectorized majority filter (smoothing)
+            smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
+
+            # Step 3: Apply pbnify's getLabelLocs function (flood-fill + region filtering)
+            regions_matrix = self._get_regions_pbnify(smoothed)
+
+            return regions_matrix
+    
+    def _create_color_id_matrix(self, quantized: np.ndarray, colors: np.ndarray) -> np.ndarray:
+            """
+            Convert quantized BGR image to color ID matrix.
+            """
+            h, w = quantized.shape[:2]
+            
+            # Convert quantized image to LAB for distance calculation
+            quantized_lab = cv2.cvtColor(quantized, cv2.COLOR_BGR2LAB).astype(np.float32)
+            
+            # Vectorized distance calculation
+            # Reshape image to (H*W, 3)
+            pixels = quantized_lab.reshape(-1, 3)
+            
+            # Calculate squared Euclidean distances to each color center
+            # (H*W, 1, 3) - (1, K, 3) -> (H*W, K, 3) -> sum -> (H*W, K)
+            diffs = pixels[:, np.newaxis, :] - colors[np.newaxis, :, :]
+            dists = np.sum(diffs**2, axis=2)
+            
+            # Find closest color ID for each pixel
+            closest_ids = np.argmin(dists, axis=1) + 1  # 1-indexed
+            
+            return closest_ids.reshape(h, w).astype(np.int32)
+
+    def _smooth_pbnify_vectorized(self, mat: np.ndarray) -> np.ndarray:
+        """
+        Vectorized implementation of pbnify's smooth function.
+        Uses majority voting in 9x9 neighborhoods.
+        """
+        h, w = mat.shape
+        unique_ids = np.unique(mat)
+        
+        # If only one color, no smoothing needed
+        if len(unique_ids) <= 1:
+            return mat
+            
+        counts = np.zeros((len(unique_ids), h, w), dtype=np.int32)
+        kernel = np.ones((9, 9), dtype=np.int32)
+        
+        # For each color, count its neighbors in a 9x9 window
+        for i, val in enumerate(unique_ids):
+            mask = (mat == val).astype(np.int32)
+            # Use OpenCV's filter2D for fast convolution
+            counts[i] = cv2.filter2D(mask, -1, kernel, borderType=cv2.BORDER_REFLECT)
+            
+        # Get the ID with the maximum count at each pixel
+        idx = np.argmax(counts, axis=0)
+        return unique_ids[idx]
+    def _get_regions_pbnify(self, mat: np.ndarray) -> np.ndarray:
+        """
+        Exact implementation of pbnify's getLabelLocs logic.
+        Finds connected regions and removes small ones.
+        """
+        h, w = mat.shape
+        covered = np.zeros((h, w), dtype=bool)
+        regions_matrix = np.zeros((h, w), dtype=np.int32)
+        next_region_id = 1
+        min_region_size = 100  # pbnify's threshold
+
+        for y in range(h):
+            for x in range(w):
+                if not covered[y, x]:
+                    # Get connected region
+                    region = self._get_region_pbnify(mat, covered, x, y, w, h)
+
+                    if len(region['x']) > min_region_size:
+                        # Keep this region - assign it a region ID
+                        for i in range(len(region['x'])):
+                            px, py = region['x'][i], region['y'][i]
+                            regions_matrix[py, px] = next_region_id
+                        next_region_id += 1
+                    else:
+                        # Remove small region (merge with neighbor)
+                        self._remove_region_pbnify(mat, region)
+
+        return regions_matrix
+
+    def _get_region_pbnify(self, mat: np.ndarray, covered: np.ndarray, x: int, y: int, width: int, height: int) -> dict:
+        """
+        Exact implementation of pbnify's getRegion function.
+        Uses queue-based flood fill.
+        """
+        # Create a copy of covered for this region
+        region_covered = covered.copy()
+
+        region = {'value': mat[y, x], 'x': [], 'y': []}
+        value = mat[y, x]
+
+        # Queue-based flood fill (exactly like pbnify)
+        queue = [[x, y]]
+
+        while queue:
+            coord = queue.pop(0)  # FIFO
+            cx, cy = coord[0], coord[1]
+
+            if (region_covered[cy, cx] == False and mat[cy, cx] == value):
+                region['x'].append(cx)
+                region['y'].append(cy)
+                region_covered[cy, cx] = True
+                covered[cy, cx] = True  # Update the main covered array
+
+                # Add 4-connected neighbors
+                if cx > 0:
+                    queue.append([cx - 1, cy])
+                if cx < width - 1:
+                    queue.append([cx + 1, cy])
+                if cy > 0:
+                    queue.append([cx, cy - 1])
+                if cy < height - 1:
+                    queue.append([cx, cy + 1])
+
+        return region
+
+    def _remove_region_pbnify(self, mat: np.ndarray, region: dict):
+        """
+        Exact implementation of pbnify's removeRegion function.
+        Merges small region with a neighbor.
+        """
+        if not region['x']:
+            return
+
+        x0, y0 = region['x'][0], region['y'][0]
+        region_value = region['value']
+
+        # Find a neighboring value (look above first, then below)
+        new_value = region_value  # fallback
+        h, w = mat.shape
+
+        if y0 > 0:
+            new_value = mat[y0 - 1, x0]
+        else:
+            # Look below (getBelowValue logic)
+            y = y0
+            while y < h and mat[y, x0] == region_value:
+                y += 1
+            if y < h:
+                new_value = mat[y, x0]
+
+        # Assign all pixels in the region to the new value
+        for i in range(len(region['x'])):
+            x, y = region['x'][i], region['y'][i]
+            mat[y, x] = new_value
+    
+    
+    def build_adjacency_graph(self, regions: np.ndarray) -> nx.Graph:
+        """
+        Build adjacency graph of regions.
+        
+        Args:
+            regions: Labeled region image
+            
+        Returns:
+            NetworkX graph where nodes are region IDs and edges connect adjacent regions
+        """
+        graph = nx.Graph()
+        
+        # Get unique region IDs (excluding background 0)
+        region_ids = np.unique(regions)
+        region_ids = region_ids[region_ids > 0]
+        
+        # Add all regions as nodes
+        for region_id in region_ids:
+            graph.add_node(int(region_id))
+        
+        # Find adjacent regions by checking 4-connectivity
+        h, w = regions.shape
+        
+        # Check horizontal adjacency
+        for y in range(h):
+            for x in range(w - 1):
+                left = regions[y, x]
+                right = regions[y, x + 1]
+                if left > 0 and right > 0 and left != right:
+                    graph.add_edge(int(left), int(right))
+        
+        # Check vertical adjacency
+        for y in range(h - 1):
+            for x in range(w):
+                top = regions[y, x]
+                bottom = regions[y + 1, x]
+                if top > 0 and bottom > 0 and top != bottom:
+                    graph.add_edge(int(top), int(bottom))
+        
+        return graph
+    
+    def shared_border_segmentation(self, regions: np.ndarray) -> Dict[int, List[LineString]]:
+        """
+        Implement Shared Border Segmentation algorithm.
+        
+        This is the key innovation: assigns border pixels to shared edges between
+        neighboring regions, eliminating gaps.
+        
+        Args:
+            regions: Labeled region image
+            
+        Returns:
+            Dictionary mapping region IDs to lists of LineString border segments
+        """
+        shared_borders = {}
+        h, w = regions.shape
+        
+        # Initialize border storage for each region
+        region_ids = np.unique(regions)
+        region_ids = region_ids[region_ids > 0]
+        for region_id in region_ids:
+            shared_borders[int(region_id)] = []
+        
+        # Find border pixels between adjacent regions
+        # We'll store border segments as sequences of points
+        border_segments = {}  # (region1, region2) -> list of points
+        
+        # Scan horizontally for borders
+        for y in range(h):
+            for x in range(w - 1):
+                left = regions[y, x]
+                right = regions[y, x + 1]
+                
+                if left > 0 and right > 0 and left != right:
+                    # Found a border between two regions
+                    pair = tuple(sorted([int(left), int(right)]))
+                    if pair not in border_segments:
+                        border_segments[pair] = []
+                    # Store the border point (between pixels)
+                    border_segments[pair].append((x + 0.5, y))
+        
+        # Scan vertically for borders
+        for y in range(h - 1):
+            for x in range(w):
+                top = regions[y, x]
+                bottom = regions[y + 1, x]
+                
+                if top > 0 and bottom > 0 and top != bottom:
+                    # Found a border between two regions
+                    pair = tuple(sorted([int(top), int(bottom)]))
+                    if pair not in border_segments:
+                        border_segments[pair] = []
+                    # Store the border point (between pixels)
+                    border_segments[pair].append((x, y + 0.5))
+        
+        # Convert border points to LineStrings
+        for (region1, region2), points in border_segments.items():
+            if len(points) >= 2:
+                # Sort points to create connected line segments
+                # For now, create a simple LineString from all points
+                # In production, you'd want to trace connected segments
+                line = LineString(points)
+                
+                # Assign this shared border to both regions
+                shared_borders[region1].append(line)
+                shared_borders[region2].append(line)
+        
+        return shared_borders
+    
+    def segment(self, quantized: np.ndarray, colors: np.ndarray) -> RegionData:
+        """
+        Complete segmentation pipeline.
+        
+        Args:
+            quantized: Quantized image (BGR format)
+            colors: Color centers in LAB space
+            
+        Returns:
+            RegionData with segmented regions, borders, and adjacency graph
+        """
+        # CONFIGURABLE SEGMENTATION: Choose between watershed and direct color segmentation
+        # Watershed (use_watershed=True): Original spec implementation with cluster centers as markers
+        # Direct (use_watershed=False): Faster alternative that assigns pixels directly to color clusters
+        
+        if self.use_watershed:
+            # Original watershed implementation - matches spec but slower
+            h, w = quantized.shape[:2]
+            markers = np.zeros((h, w), dtype=np.int32)
+            
+            # Get unique colors in the quantized image and map them to marker IDs
+            quantized_2d = quantized.reshape(-1, 3)
+            unique_colors_bgr = np.unique(quantized_2d, axis=0)
+            
+            # Convert unique BGR colors to LAB for matching with cluster centers
+            unique_colors_lab = cv2.cvtColor(unique_colors_bgr.reshape(1, -1, 3), cv2.COLOR_BGR2LAB).reshape(-1, 3)
+            
+            # For each cluster center, find the closest quantized color and create markers
+            for i, center_lab in enumerate(colors):
+                # Find the closest quantized color to this cluster center
+                distances = np.sum((unique_colors_lab - center_lab) ** 2, axis=1)
+                closest_idx = np.argmin(distances)
+                closest_color_bgr = unique_colors_bgr[closest_idx]
+                
+                # Create mask for pixels of this color
+                color_mask = np.all(quantized == closest_color_bgr, axis=2)
+                
+                # Set marker ID (i+1 because watershed uses 0 for unknown regions)
+                markers[color_mask] = i + 1
+            
+            # Apply watershed transform
+            segmented = self.watershed_transform(quantized, markers)
+        else:
+            # Direct color segmentation - faster alternative
+            segmented = self.direct_color_segmentation(quantized, colors)
+        
+        # Build adjacency graph
+        adjacency_graph = self.build_adjacency_graph(segmented)
+        
+        # Apply shared border segmentation
+        shared_borders = self.shared_border_segmentation(segmented)
+        
+        # Create polygons from segmented regions
+        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.validation import make_valid
+        from shapely.ops import unary_union
+        regions = {}
+        region_ids = np.unique(segmented)
+        region_ids = region_ids[region_ids > 0]
+        
+        for region_id in region_ids:
+            # Create mask for this region
+            mask = (segmented == region_id).astype(np.uint8) * 255
+            
+            # Apply morphological operations to smooth edges
+            # Opening removes small protrusions, closing fills small holes
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+            
+            # Apply Gaussian blur to further smooth edges
+            mask = cv2.GaussianBlur(mask, (5, 5), 0)
+            
+            # Threshold back to binary
+            _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+            
+            # Find contours - use CHAIN_APPROX_SIMPLE for efficiency
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if contours:
+                # Use the largest contour
+                largest_contour = max(contours, key=cv2.contourArea)
+                
+                # Convert to polygon - need at least 3 points
+                if len(largest_contour) >= 3:
+                    # Simplify the contour to reduce points while preserving shape
+                    # Use Douglas-Peucker algorithm with moderate tolerance
+                    epsilon = 1.0  # Tolerance for simplification
+                    simplified = cv2.approxPolyDP(largest_contour, epsilon, True)
+                    
+                    if len(simplified) >= 3:
+                        points = simplified.reshape(-1, 2).tolist()
+                        
+                        # Need at least 3 unique points for a polygon
+                        if len(points) >= 3:
+                            try:
+                                polygon = Polygon(points)
+                                
+                                # Fix invalid polygons
+                                if not polygon.is_valid:
+                                    # Try to fix with buffer(0) trick first
+                                    polygon = polygon.buffer(0)
+                                
+                                # Extract polygon from result (buffer can return MultiPolygon)
+                                final_polygon = None
+                                
+                                if polygon.geom_type == 'Polygon':
+                                    final_polygon = polygon
+                                elif polygon.geom_type == 'GeometryCollection':
+                                    # Get all polygons from collection
+                                    polygons = [geom for geom in polygon.geoms 
+                                               if geom.geom_type == 'Polygon']
+                                    if polygons:
+                                        final_polygon = max(polygons, key=lambda p: p.area)
+                                elif polygon.geom_type == 'MultiPolygon':
+                                    # Get largest polygon from multipolygon
+                                    final_polygon = max(polygon.geoms, key=lambda p: p.area)
+                                
+                                # Only add if it's a valid polygon with area
+                                if final_polygon and final_polygon.geom_type == 'Polygon' and final_polygon.is_valid and final_polygon.area > 0:
+                                    regions[int(region_id)] = final_polygon
+                            except Exception as e:
+                                # Skip regions that can't be converted to valid polygons
+                                pass
+        
+        return RegionData(
+            regions=regions,
+            shared_borders=shared_borders,
+            adjacency_graph=adjacency_graph
+        )

@@ -1,0 +1,11 @@
+[project]
+name = "comfyui-paint-by-numbers"
+version = "1.0.0"
+description = "A ComfyUI custom node that transforms images into high-quality paint-by-number templates."
+license = "MIT"
+requires-python = ">=3.10"
+
+[tool.comfy]
+PublisherId = "tazztone"
+DisplayName = "Paint By Number"
+Icon = "🎨"
