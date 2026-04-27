@@ -111,21 +111,9 @@ Once you've installed the node, there are several ways to extend your workflow.
 
 ## Roadmap
 
-To reach professional-grade output, we are planning to integrate the following "best of breed" features from other PBN research:
+For the full list of planned features and their implementation priority, see
+[ROADMAP.md](ROADMAP.md).
 
-- [ ] **Shared Border Segmentation**: Porting the "Facet Border Segmenter" logic from `paintbynumbersgenerator` to eliminate SVG gaps caused by independent shape simplification.
-- [ ] **Content-Aware Preprocessing**: Adding face and object detection (from `my-paint-by-numbers`) to protect high-frequency details in portraits and pets.
-- [ ] **CIEDE2000 Color Distance**: Moving from Euclidean LAB to the industry-standard CIEDE2000 formula (from `paintr`) for superior perceptual color matching.
-- [ ] **Interactive Palette Controls**: Adding ComfyUI widget support for manual color merging and splitting (from `paintbynumbers`).
-
-### AI / Deep Learning Candidates
-
-The following advanced techniques are under consideration to further improve segmentation quality and region semantics:
-
-- [ ] **SAM 3.1 (Segment Anything with Concepts)**: Replace or augment `direct_color_segmentation()` with Meta's [SAM 3.1](https://huggingface.co/facebook/sam3.1) auto-mask generator. SAM 3.1 extends SAM 2 with open-vocabulary concept segmentation (text prompts) and Object Multiplex for ~7x faster multi-object tracking. Would be exposed as an optional `use_sam` toggle alongside the existing `use_watershed` flag.
-- [ ] **Depth Anything 3 (DA3)**: Add a depth-map preprocessing stage using [DA3-LARGE](https://huggingface.co/depth-anything/DA3-LARGE-1.1) (0.35B params, ByteDance Seed) to split the color budget between foreground and background. DA3 outperforms both Depth Anything 2 and VGGT for monocular depth, and also provides confidence maps that can weight region importance during quantization — particularly beneficial for portraits and landscapes.
-- [ ] **SLIC Superpixels**: Insert a superpixel pre-segmentation step (scikit-image `slic`) between preprocessing and color quantization. Superpixels constrain KMeans to perceptually uniform regions, dramatically reducing speckle without the cost of a full neural inference pass.
-- [ ] **Learned Edge Detection (DexiNed / HED)**: Replace the morphological smoothing in `segmenter.py` with a learned edge detector to produce crisper, more artistically natural contour boundaries and cleaner SVG paths.
 
 ## License
 
