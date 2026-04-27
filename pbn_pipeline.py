@@ -31,13 +31,14 @@ class ImageProcessor:
         self.label_placer = LabelPlacer()
         self.svg_generator = SVGGenerator()
     
-    def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters) -> SVGResult:
+    def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None) -> SVGResult:
         """
         Process image array through complete pipeline.
         
         Args:
             image_bgr: Input image in BGR format (numpy array)
             params: Processing parameters
+            api: Optional ComfyAPISync instance for progress reporting
             
         Returns:
             SVGResult with generated SVG and metadata
@@ -47,19 +48,23 @@ class ImageProcessor:
         try:
             # Stage 2: Preprocessing
             logger.info("Stage 1/6: Preprocessing image")
+            if api: api.execution.set_progress(1, 6)
             preprocessed, metadata = self.preprocessor.preprocess(image_bgr)
             
             # Stage 3: Color Quantization
             logger.info("Stage 2/6: Quantizing colors")
+            if api: api.execution.set_progress(2, 6)
             quantized, palette = self.quantizer.quantize(preprocessed, params.num_colors)
             
             # Stage 4: Region Segmentation
             logger.info("Stage 3/6: Segmenting regions")
+            if api: api.execution.set_progress(3, 6)
             segmenter = RegionSegmenter(use_watershed=params.use_watershed)
             region_data = segmenter.segment(quantized, palette.colors)
             
             # Stage 5: Vectorization
             logger.info("Stage 4/6: Vectorizing regions")
+            if api: api.execution.set_progress(4, 6)
             vectorized_regions = self.vectorizer.vectorize(region_data, params.simplification)
             
             # Optional: Remove speckles
@@ -75,10 +80,12 @@ class ImageProcessor:
             
             # Stage 6: Label Placement
             logger.info("Stage 5/6: Placing labels")
+            if api: api.execution.set_progress(5, 6)
             label_data = self.label_placer.place_labels(cleaned_regions)
             
             # Stage 7: SVG Generation
             logger.info("Stage 6/6: Generating SVG")
+            if api: api.execution.set_progress(6, 6)
             svg_content = self.svg_generator.generate_svg(
                 cleaned_regions,
                 label_data,
