@@ -109,6 +109,15 @@ Once you've installed the node, there are several ways to extend your workflow.
 - Experiment with the **simplification** setting to balance detail and ease of
   painting.
 
+## Roadmap
+
+To reach professional-grade output, we are planning to integrate the following "best of breed" features from other PBN research:
+
+- [ ] **Shared Border Segmentation**: Porting the "Facet Border Segmenter" logic from `paintbynumbersgenerator` to eliminate SVG gaps caused by independent shape simplification.
+- [ ] **Content-Aware Preprocessing**: Adding face and object detection (from `my-paint-by-numbers`) to protect high-frequency details in portraits and pets.
+- [ ] **CIEDE2000 Color Distance**: Moving from Euclidean LAB to the industry-standard CIEDE2000 formula (from `paintr`) for superior perceptual color matching.
+- [ ] **Interactive Palette Controls**: Adding ComfyUI widget support for manual color merging and splitting (from `paintbynumbers`).
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for
