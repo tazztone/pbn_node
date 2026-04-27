@@ -2,24 +2,27 @@
 Data models for the Paint By Number Generator.
 Defines core data structures used throughout the processing pipeline.
 """
+
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Dict, List, Set, Tuple
-import numpy as np
-from shapely.geometry import Polygon, Point, LineString
+from typing import Dict, List, Optional, Set
+
 import networkx as nx
+import numpy as np
+from shapely.geometry import LineString, Point, Polygon
 
 
 @dataclass
 class ProcessingJob:
     """Represents a single image processing job."""
+
     job_id: str
     status: str  # "processing" | "complete" | "failed"
     input_path: str
     output_svg: Optional[str] = None
     error_message: Optional[str] = None
-    created_at: datetime = None
-    
+    created_at: Optional[datetime] = None
+
     def __post_init__(self):
         if self.created_at is None:
             self.created_at = datetime.now()
@@ -28,9 +31,10 @@ class ProcessingJob:
 @dataclass
 class ProcessingParameters:
     """Parameters for image processing."""
+
     num_colors: Optional[int] = None  # None for auto-detection
-    simplification: float = 1.0       # 0.5-2.0 pixel tolerance
-    use_watershed: bool = False       # Whether to use watershed segmentation (slower but original spec)
+    simplification: float = 1.0  # 0.5-2.0 pixel tolerance
+    use_watershed: bool = False  # Whether to use watershed segmentation (slower but original spec)
 
     def __post_init__(self):
         # Validate simplification range
@@ -41,6 +45,7 @@ class ProcessingParameters:
 @dataclass
 class ImageMetadata:
     """Metadata about the input image."""
+
     width: int
     height: int
     channels: int
@@ -51,30 +56,34 @@ class ImageMetadata:
 @dataclass
 class ColorPalette:
     """Color palette information."""
-    colors: np.ndarray      # LAB color values
-    hex_colors: List[str]   # Hex representation for SVG
+
+    colors: np.ndarray  # LAB color values
+    hex_colors: List[str]  # Hex representation for SVG
     color_count: int
 
 
 @dataclass
 class RegionData:
     """Data about segmented regions."""
-    regions: Dict[int, Polygon]                    # Region ID -> Polygon
-    shared_borders: Dict[int, List[LineString]]    # Shared border segments
-    adjacency_graph: nx.Graph                      # Region adjacency
+
+    regions: Dict[int, Polygon]  # Region ID -> Polygon
+    shared_borders: Dict[int, List[LineString]]  # Shared border segments
+    adjacency_graph: nx.Graph  # Region adjacency
 
 
 @dataclass
 class LabelData:
     """Data about label placement."""
+
     positions: Dict[int, Point]  # Region ID -> Label position
-    font_sizes: Dict[int, int]   # Region ID -> Font size
-    skipped_regions: Set[int]    # Regions too small for labels
+    font_sizes: Dict[int, int]  # Region ID -> Font size
+    skipped_regions: Set[int]  # Regions too small for labels
 
 
 @dataclass
 class SVGResult:
     """Final SVG generation result."""
+
     svg_content: str
     color_palette: ColorPalette
     processing_time: float

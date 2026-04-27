@@ -7,7 +7,9 @@ ComfyUI workflows.
 
 ## Features
 
-This node provides several advanced tools for creating paint-by-number assets:
+This node provides several advanced tools for creating paint-by-number assets.
+It's built on a modular backend that ensures high performance and reliable
+results.
 
 - **V3 API support:** Built on the modern ComfyUI V3 API for better performance
   and compatibility.
@@ -22,7 +24,8 @@ This node provides several advanced tools for creating paint-by-number assets:
 
 ## Installation
 
-To install the node, follow these steps:
+To install the node, follow these steps. Note that this project requires Python
+3.10 or higher.
 
 1.  Navigate to your ComfyUI custom nodes directory:
     ```bash
@@ -45,11 +48,12 @@ To install the node, follow these steps:
 ## Usage
 
 You can find the node in the ComfyUI menu under **image** > **process** >
-**Paint By Number**.
+**Paint By Number**. It integrates seamlessly with other image processing
+nodes.
 
 ### Inputs
 
-The node accepts the following configuration parameters:
+The node accepts several configuration parameters to fine-tune the result.
 
 - **image:** The input image tensor you want to process.
 - **num_colors:** The number of color clusters to use. Set this to `0` to enable
@@ -63,14 +67,41 @@ The node accepts the following configuration parameters:
 
 ### Outputs
 
-The node returns three values:
+The node returns three values that you can use in your workflow.
 
 - **IMAGE:** The rendered raster template based on your selected output mode.
 - **SVG:** A string containing the raw SVG data for the generated template.
 - **COLOR_COUNT:** An integer representing the total number of colors used in
   the final palette.
 
+## Development
+
+We use modern static analysis tools to maintain code quality. If you want to
+contribute to the project, we recommend using `uv` to run these tools without
+manual installation.
+
+### Linting and formatting
+
+We use `ruff` for linting and code formatting. You can run these checks using
+the following commands:
+
+```bash
+uvx ruff check .
+uvx ruff format .
+```
+
+### Type checking
+
+We use `mypy` for static type checking to catch potential logic errors early.
+Run it with this command:
+
+```bash
+uvx mypy .
+```
+
 ## Next steps
+
+Once you've installed the node, there are several ways to extend your workflow.
 
 - Try connecting the **SVG** output to a file-saving node to export vector
   templates.
@@ -80,4 +111,5 @@ The node returns three values:
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See the `LICENSE` file for
+details.

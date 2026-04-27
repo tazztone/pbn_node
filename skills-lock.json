@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "lint-and-validate": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "37854110489e24a286c4ef95629e9eac158f4f63464ab02c02983c3d51ef9561"
+    }
+  }
+}
