@@ -118,6 +118,15 @@ To reach professional-grade output, we are planning to integrate the following "
 - [ ] **CIEDE2000 Color Distance**: Moving from Euclidean LAB to the industry-standard CIEDE2000 formula (from `paintr`) for superior perceptual color matching.
 - [ ] **Interactive Palette Controls**: Adding ComfyUI widget support for manual color merging and splitting (from `paintbynumbers`).
 
+### AI / Deep Learning Candidates
+
+The following advanced techniques are under consideration to further improve segmentation quality and region semantics:
+
+- [ ] **SAM 2 (Segment Anything Model 2)**: Replace or augment `direct_color_segmentation()` with Meta's SAM 2 auto-mask generator to produce semantically meaningful, object-aware boundaries. Would be exposed as an optional `use_sam2` toggle alongside the existing `use_watershed` flag, and would depend on the widely-used `ComfyUI-SAM2` node if already installed.
+- [ ] **Depth Estimation (Depth Anything V2)**: Add a depth-map preprocessing stage to split the color budget between foreground and background. Foreground regions (high depth) receive proportionally more colors and finer detail, while flat backgrounds are aggressively simplified — particularly beneficial for portraits and landscapes.
+- [ ] **SLIC Superpixels**: Insert a superpixel pre-segmentation step (scikit-image `slic`) between preprocessing and color quantization. Superpixels constrain KMeans to perceptually uniform regions, dramatically reducing speckle without the cost of a full neural inference pass.
+- [ ] **Learned Edge Detection (DexiNed / HED)**: Replace the morphological smoothing in `segmenter.py` with a learned edge detector to produce crisper, more artistically natural contour boundaries and cleaner SVG paths.
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for
