@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from comfy_api.latest import ComfyAPISync, io, ui
 
-from .backend.models import ProcessingParameters
+from .backend.models import PerceptionInputs, ProcessingParameters
 from .pbn_pipeline import ImageProcessor
 from .pbn_renderer import PBNRenderer
 
@@ -27,6 +27,11 @@ class PaintByNumberNode(io.ComfyNode):
             is_output_node=True,
             inputs=[
                 io.Image.Input("image", tooltip="Input image(s) to process."),
+                io.Image.Input("albedo", optional=True, tooltip="Optional albedo image."),
+                io.Image.Input(
+                    "segmentation", optional=True, tooltip="Optional segmentation/mask image."
+                ),
+                io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
                 io.Int.Input(
                     "num_colors",
                     default=0,
@@ -91,7 +96,15 @@ class PaintByNumberNode(io.ComfyNode):
                 ),
                 io.Boolean.Input("use_bezier_smooth", default=False, advanced=True),
                 io.Boolean.Input("use_content_protect", default=False, advanced=True),
-                io.Boolean.Input("use_budget_split", default=False, advanced=True),
+                io.Float.Input(
+                    "subject_priority", default=2.0, min=1.0, max=5.0, step=0.1, advanced=True
+                ),
+                io.Float.Input(
+                    "material_weight", default=0.5, min=0.0, max=1.0, step=0.1, advanced=True
+                ),
+                io.Float.Input(
+                    "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
+                ),
             ],
             outputs=[
                 io.Image.Output("IMAGE", tooltip="The rendered paint-by-number image."),
@@ -116,6 +129,9 @@ class PaintByNumberNode(io.ComfyNode):
         simplification,
         use_watershed,
         output_mode,
+        albedo=None,
+        segmentation=None,
+        normal=None,
         preset="balanced",
         use_slic=True,
         use_ciede2000=True,
@@ -127,7 +143,9 @@ class PaintByNumberNode(io.ComfyNode):
         label_mode="polylabel",
         use_bezier_smooth=False,
         use_content_protect=False,
-        use_budget_split=False,
+        subject_priority=2.0,
+        material_weight=0.5,
+        edge_influence=0.3,
     ):
         # Apply presets
         if preset != "custom":
@@ -152,9 +170,43 @@ class PaintByNumberNode(io.ComfyNode):
                 use_shared_borders = True
                 use_bezier_smooth = False
                 use_content_protect = True
-                use_budget_split = True
             else:
                 raise ValueError(f"Unknown preset: {preset}")
+
+        # Convert torch tensors to numpy BGR for perception inputs
+        def torch_to_bgr(t):
+            if t is None:
+                return None
+            # [B, H, W, C] -> [H, W, C] (take first in batch)
+            img_np = (t[0].cpu().numpy() * 255).astype(np.uint8)
+            if len(img_np.shape) == 2:  # Grayscale
+                return cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
+            return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+        albedo_np = torch_to_bgr(albedo)
+        segmentation_np = None
+        if segmentation is not None:
+            # For segmentation, we want the raw class labels if possible,
+            # but if it's an RGB image we'll use torch_to_bgr and then unique later.
+            segmentation_np = (segmentation[0].cpu().numpy() * 255).astype(np.uint8)
+            if len(segmentation_np.shape) == 3:
+                # Convert RGB to a 1D label map
+                segmentation_np = (
+                    segmentation_np[:, :, 0].astype(np.uint32) * 65536
+                    + segmentation_np[:, :, 1].astype(np.uint32) * 256
+                    + segmentation_np[:, :, 2].astype(np.uint32)
+                )
+
+        normal_np = torch_to_bgr(normal)
+
+        perception = PerceptionInputs(
+            albedo=albedo_np,
+            segmentation_mask=segmentation_np,
+            normal_map=normal_np,
+            subject_priority=subject_priority,
+            material_weight=material_weight,
+            edge_influence=edge_influence,
+        )
 
         # image is [B, H, W, C] RGB float32
         batch_size = image.shape[0]
@@ -180,7 +232,7 @@ class PaintByNumberNode(io.ComfyNode):
             label_mode=label_mode,
             use_bezier_smooth=use_bezier_smooth,
             use_content_protect=use_content_protect,
-            use_budget_split=use_budget_split,
+            perception=perception,
             preset=preset,
             output_mode=output_mode,
         )

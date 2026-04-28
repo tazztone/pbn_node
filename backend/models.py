@@ -29,6 +29,19 @@ class ProcessingJob:
 
 
 @dataclass
+class PerceptionInputs:
+    """Container for perception-stack inputs like albedo, segmentation, and normals."""
+
+    albedo: np.ndarray | None = None
+    segmentation_mask: np.ndarray | None = None
+    normal_map: np.ndarray | None = None
+    background_ids: list[int] = field(default_factory=lambda: [0])
+    subject_priority: float = 2.0
+    edge_influence: float = 0.3
+    material_weight: float = 0.5  # Blend factor between albedo and original photo
+
+
+@dataclass
 class ProcessingParameters:
     """Parameters for image processing."""
 
@@ -47,7 +60,7 @@ class ProcessingParameters:
     label_mode: Literal["centroid", "polylabel"] = "polylabel"
     use_bezier_smooth: bool = False
     use_content_protect: bool = False
-    use_budget_split: bool = False
+    perception: PerceptionInputs | None = None
     preset: str = "balanced"
     output_mode: str = "colored"
 
