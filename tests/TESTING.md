@@ -51,7 +51,7 @@ tests/
 
 ## Test categories
 
-### Unit tests (11 tests)
+### Unit tests (14 tests)
 
 Fast tests that validate individual backend components without ComfyUI
 dependencies.
@@ -69,6 +69,9 @@ dependencies.
 | `test_direct_color_segmentation` | Segmentation without watershed |
 | `test_execute_returns_svg_preview` | Node UI payload verification |
 | `test_svg_filename_determinism` | Hash-based filename consistency |
+| `test_budget_allocation_k_sum` | Perception budget summation |
+| `test_budget_allocation_min_k` | Minimum k per segment check |
+| `test_albedo_guided_quantization_shift` | Albedo influence verification |
 
 ### Integration tests (4 tests)
 

@@ -23,6 +23,8 @@ results.
   software like Inkscape or Adobe Illustrator.
 - **Vector preview:** Real-time, resolution-independent SVG preview directly
   within the ComfyUI node body.
+- **Perception stack:** Support for albedo, segmentation masks, and normal maps
+  to guide color quantization and budget allocation.
 
 ## Installation
 
@@ -58,6 +60,10 @@ nodes.
 The node accepts several configuration parameters to fine-tune the result.
 
 - **image:** The input image tensor you want to process.
+- **albedo:** Optional albedo image used to guide color clustering. This helps
+  isolate material color from lighting conditions.
+- **segmentation:** Optional segmentation or mask image. When provided, the node
+  allocates color budgets proportionally to the detected regions.
 - **num_colors:** The number of color clusters to use. Set this to `0` to enable
   automatic detection.
 - **simplification:** Controls how much the region contours are simplified.
@@ -66,6 +72,10 @@ The node accepts several configuration parameters to fine-tune the result.
   segmentation. This is more accurate to the original specification but slower.
 - **output_mode:** Selects the visual style of the output image (**colored**,
   **outline**, or **quantized**).
+- **subject_priority:** A multiplier for color allocation to non-background
+  segments when using a segmentation mask.
+- **material_weight:** Controls the influence of the albedo map over the
+  original photo during quantization.
 
 ### Outputs
 

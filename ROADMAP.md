@@ -25,7 +25,7 @@ perception-aware and content-aware system.
 | 11 | **Palette merge defaults fix** | 🟡 UX | 🟢 Trivial | 📅 Planned | ★★★★☆ |
 | 12 | **Lineart exclusion mask** | 🟡 Medium | 🟢 Low | 📅 Planned | ★★★☆☆ |
 | 13 | **numbers_density parameter** | 🟡 Medium | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
-| 14 | **Content-Aware Budget Split** | 🟢 High | 🟡 Moderate | 📅 Planned | ★★★★☆ |
+| 14 | **Content-Aware Budget Split** | 🟢 High | 🟡 Moderate | ✅ Done | ★★★★☆ |
 | 15 | **Perceptual Palette Sorting** | 🟡 UX | 🟢 Low | 📅 Planned | ★★★☆☆ |
 | 16 | **Label Collision Avoidance** | 🟡 UX | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
 | 17 | **Exposed Clean-up Controls** | 🟢 Quality | 🟢 Trivial | 📅 Planned | ★★★★☆ |
@@ -92,6 +92,18 @@ eliminating performance bottlenecks on high-resolution images.
 Rewrote the adjacency graph building and shared border detection logic using
 NumPy vectorized operations, significantly reducing processing time for large
 images.
+
+### Perception Stack (Albedo & Segmentation)
+Implemented the unified perception stack architecture. This includes support for
+optional albedo maps (material-aware quantization) and segmentation-guided
+budget splitting. The system now supports proportional color allocation with
+`subject_priority` weighting for non-background regions.
+
+### Content-Aware Budget Splitting
+Implemented a multi-segment quantization pipeline that uses an external
+segmentation mask (or an automatic Otsu-based fallback) to allocate independent
+color budgets to different image regions. This ensures important details in the
+subject are preserved regardless of background complexity.
 
 ---
 
