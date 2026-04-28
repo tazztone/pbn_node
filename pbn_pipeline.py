@@ -97,8 +97,28 @@ class ImageProcessor:
             )
             quantizer.protection_map = protection_map
 
+            # stage metadata
+            perception = params.perception
+            lineart_map = perception.lineart if perception else None
+            lineart_strength = perception.lineart_strength if perception else 0.0
+
+            # Auto-albedo: estimate albedo via MSR if no external albedo provided
+            # This must run BEFORE quantization to influence the palette
+            if params.use_auto_albedo and (perception is None or perception.albedo is None):
+                from .backend.preprocessing.retinex import multiscale_retinex
+
+                logger.info("Estimating auto-albedo via MSR Retinex")
+                auto_albedo = multiscale_retinex(input_for_quantization)
+                perception = (
+                    dataclasses.replace(perception, albedo=auto_albedo)
+                    if perception
+                    else PerceptionInputs(albedo=auto_albedo)
+                )
+                # Ensure updated perception is used for quantization
+                params = dataclasses.replace(params, perception=perception)
+
             # Stage 3: Color Quantization
-            logger.info("Stage 2/6: Quantizing colors")
+            logger.info("Stage 2/6: Quantizing image colors")
             if api:
                 api.execution.set_progress(2, 6)
 
@@ -106,28 +126,10 @@ class ImageProcessor:
                 input_for_quantization, params.num_colors, perception=params.perception
             )
 
-            # Auto-albedo: estimate albedo via MSR if no external albedo provided
-            if params.use_auto_albedo and (
-                params.perception is None or params.perception.albedo is None
-            ):
-                from .backend.preprocessing.retinex import multiscale_retinex
-
-                logger.info("Estimating auto-albedo via MSR Retinex")
-                auto_albedo = multiscale_retinex(input_for_quantization)
-                new_perception = (
-                    dataclasses.replace(params.perception, albedo=auto_albedo)
-                    if params.perception
-                    else PerceptionInputs(albedo=auto_albedo)
-                )
-                params = dataclasses.replace(params, perception=new_perception)
-
             # Stage 4: Region Segmentation
             logger.info("Stage 3/6: Segmenting regions")
             if api:
                 api.execution.set_progress(3, 6)
-
-            lineart_map = params.perception.lineart if params.perception else None
-            lineart_strength = params.perception.lineart_strength if params.perception else 0.0
 
             segmenter = RegionSegmenter(
                 use_watershed=params.use_watershed,
@@ -168,7 +170,6 @@ class ImageProcessor:
                 api.execution.set_progress(5, 6)
             from .backend.labeling.label_placer import LabelPlacer
 
-            lineart_map = params.perception.lineart if params.perception else None
             label_placer = LabelPlacer(label_mode=params.label_mode, lineart=lineart_map)
             label_data = label_placer.place_labels(cleaned_regions)
 

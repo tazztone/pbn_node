@@ -186,14 +186,34 @@ class LabelPlacer:
                     px, py = int(label_position.x), int(label_position.y)
                     h, w = self._exclusion_mask.shape[:2]
                     if 0 <= py < h and 0 <= px < w and self._exclusion_mask[py, px] > 0:
-                        # Position is on a line! Try fallback nudge
-                        # First fallback: centroid (often safer if polylabel hit a line)
+                        # Position is on a line! Try fallback chain:
+                        # 1. Centroid (often safer if polylabel hit a line)
                         label_position = polygon.centroid
                         px2, py2 = int(label_position.x), int(label_position.y)
                         if 0 <= py2 < h and 0 <= px2 < w and self._exclusion_mask[py2, px2] > 0:
-                            # Centroid also hit a line - use representative_point
-                            # (guaranteed to be inside, though not necessarily pretty)
-                            label_position = polygon.representative_point()
+                            # 2. Grid search within bounding box for a "clear" interior point
+                            minx, miny, maxx, maxy = polygon.bounds
+                            # Sample 10x10 grid
+                            found_clear = False
+                            for gx in np.linspace(minx, maxx, 10):
+                                for gy in np.linspace(miny, maxy, 10):
+                                    gp = Point(gx, gy)
+                                    if polygon.contains(gp):
+                                        igx, igy = int(gx), int(gy)
+                                        if (
+                                            0 <= igy < h
+                                            and 0 <= igx < w
+                                            and self._exclusion_mask[igy, igx] == 0
+                                        ):
+                                            label_position = gp
+                                            found_clear = True
+                                            break
+                                if found_clear:
+                                    break
+
+                            if not found_clear:
+                                # 3. Last resort: guaranteed interior but suboptimal
+                                label_position = polygon.representative_point()
 
                 positions[region_id] = label_position
 

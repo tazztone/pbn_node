@@ -1,5 +1,7 @@
 """Multiscale Retinex for shadow-free albedo estimation."""
 
+from collections.abc import Sequence
+
 import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter
@@ -7,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 
 def multiscale_retinex(
     image_bgr: np.ndarray,
-    scales: tuple[int, ...] = (15, 80, 250),
+    scales: Sequence[int] = (15, 80, 250),
 ) -> np.ndarray:
     """
     Apply Multiscale Retinex (MSR) to estimate intrinsic albedo.
@@ -45,5 +47,7 @@ def multiscale_retinex(
         retinex = np.full_like(retinex, 128.0)
 
     lab[:, :, 0] = retinex
+    # Clamp chrominance channels to valid range [0, 255] before uint8 cast
+    lab[:, :, 1:] = np.clip(lab[:, :, 1:], 0, 255)
     result = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
     return result

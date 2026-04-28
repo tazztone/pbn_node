@@ -32,12 +32,12 @@ class RegionSegmenter:
         Initialize segmenter with configuration options.
 
         Args:
-            use_watershed: Whether to use watershed transform (default: False)
-                          When False, uses direct color-based segmentation for better performance
-                          When True, uses watershed with cluster centers as markers (original spec)
-            use_ciede2000: Whether to use perceptually accurate CIEDE2000 distance
-            use_thin_cleanup: Whether to run thin-region scanline cleanup
-            min_region_width: Minimum width for regions to be preserved in scanline cleanup
+            use_watershed: Whether to use watershed transform
+            use_ciede2000: Whether to use CIEDE2000 color distance
+            use_thin_cleanup: Whether to merge thin regions
+            min_region_width: Minimum width for a region to survive
+            edge_weight_map: Optional edge map (e.g. lineart) to guide segmentation
+            lineart_strength: How much to trust the edge map [0, 1]
         """
         self.min_distance = 10  # Minimum distance for peak detection
         self.use_watershed = use_watershed
@@ -247,8 +247,8 @@ class RegionSegmenter:
         # Phase 1 refinement: preserve original colors at strong edges
         # This prevents the majority vote from 'eating' thin details on lines
         if self.edge_weight_map is not None and self.lineart_strength > 0:
-            # We use 0.5 as a threshold for "strong edge"
-            edge_mask = self.edge_weight_map > 0.5
+            # We use 0.8 as a threshold for "strong edge" to avoid noise
+            edge_mask = self.edge_weight_map > 0.8
             smoothed[edge_mask] = mat[edge_mask]
 
         return smoothed
