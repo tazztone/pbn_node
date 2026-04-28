@@ -39,6 +39,15 @@ class PerceptionInputs:
     subject_priority: float = 2.0
     edge_influence: float = 0.3
     material_weight: float = 0.5  # Blend factor between albedo and original photo
+    use_auto_mask: bool = False  # Whether to generate an Otsu mask if segmentation_mask is None
+
+    def __post_init__(self):
+        if not (0.0 <= self.material_weight <= 1.0):
+            raise ValueError("material_weight must be between 0.0 and 1.0")
+        if not (1.0 <= self.subject_priority <= 10.0):
+            raise ValueError("subject_priority must be >= 1.0")
+        if not (0.0 <= self.edge_influence <= 1.0):
+            raise ValueError("edge_influence must be between 0.0 and 1.0")
 
 
 @dataclass

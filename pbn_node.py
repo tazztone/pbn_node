@@ -31,7 +31,7 @@ class PaintByNumberNode(io.ComfyNode):
                 io.Image.Input(
                     "segmentation", optional=True, tooltip="Optional segmentation/mask image."
                 ),
-                io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
+                # io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
                 io.Int.Input(
                     "num_colors",
                     default=0,
@@ -102,9 +102,9 @@ class PaintByNumberNode(io.ComfyNode):
                 io.Float.Input(
                     "material_weight", default=0.5, min=0.0, max=1.0, step=0.1, advanced=True
                 ),
-                io.Float.Input(
-                    "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
-                ),
+                # io.Float.Input(
+                #     "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
+                # ),
             ],
             outputs=[
                 io.Image.Output("IMAGE", tooltip="The rendered paint-by-number image."),
@@ -147,6 +147,7 @@ class PaintByNumberNode(io.ComfyNode):
         material_weight=0.5,
         edge_influence=0.3,
     ):
+        use_auto_mask = False
         # Apply presets
         if preset != "custom":
             if preset == "fast":
@@ -170,6 +171,7 @@ class PaintByNumberNode(io.ComfyNode):
                 use_shared_borders = True
                 use_bezier_smooth = False
                 use_content_protect = True
+                use_auto_mask = True
             else:
                 raise ValueError(f"Unknown preset: {preset}")
 
@@ -199,14 +201,21 @@ class PaintByNumberNode(io.ComfyNode):
 
         normal_np = torch_to_bgr(normal)
 
-        perception = PerceptionInputs(
-            albedo=albedo_np,
-            segmentation_mask=segmentation_np,
-            normal_map=normal_np,
-            subject_priority=subject_priority,
-            material_weight=material_weight,
-            edge_influence=edge_influence,
+        has_perception = (
+            any(x is not None for x in [albedo_np, segmentation_np, normal_np]) or use_auto_mask
         )
+
+        perception = None
+        if has_perception:
+            perception = PerceptionInputs(
+                albedo=albedo_np,
+                segmentation_mask=segmentation_np,
+                normal_map=normal_np,
+                subject_priority=subject_priority,
+                material_weight=material_weight,
+                edge_influence=edge_influence,
+                use_auto_mask=use_auto_mask,
+            )
 
         # image is [B, H, W, C] RGB float32
         batch_size = image.shape[0]

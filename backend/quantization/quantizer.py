@@ -35,6 +35,23 @@ class ColorQuantizer:
         self.use_ciede2000 = use_ciede2000
         self.protection_map: np.ndarray | None = None
 
+    def _blend_with_albedo(
+        self, pixels: np.ndarray, albedo: np.ndarray, material_weight: float, h: int, w: int
+    ) -> np.ndarray:
+        """Helper to blend LAB pixels with albedo pixels."""
+        if albedo.shape[:2] != (h, w):
+            albedo = cv2.resize(albedo, (w, h), interpolation=cv2.INTER_LINEAR)
+        albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
+        albedo_pixels = albedo_lab.reshape(-1, 3)
+        return material_weight * albedo_pixels + (1.0 - material_weight) * pixels
+
+    def _get_otsu_mask(self, image: np.ndarray) -> np.ndarray:
+        """Generate a binary mask using Otsu thresholding on the Value channel."""
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        v_channel = hsv[:, :, 2]
+        _, mask = cv2.threshold(v_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return mask
+
     def kmeans_lab(
         self,
         image: np.ndarray,
@@ -60,14 +77,7 @@ class ColorQuantizer:
         pixels = lab_image.reshape(-1, 3)
 
         if albedo is not None:
-            # Ensure albedo matches image size
-            if albedo.shape[:2] != (h, w):
-                albedo = cv2.resize(albedo, (w, h), interpolation=cv2.INTER_LINEAR)
-            albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
-            albedo_pixels = albedo_lab.reshape(-1, 3)
-
-            # Blend albedo and original photo for fitting
-            fit_pixels = material_weight * albedo_pixels + (1.0 - material_weight) * pixels
+            fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
         else:
             fit_pixels = pixels
 
@@ -143,7 +153,7 @@ class ColorQuantizer:
         areas = counts[valid_indices]
 
         if len(labels) <= 1:
-            return self.quantize(image, num_colors)
+            return self.quantize(image, num_colors, perception=None)
 
         # Calculate weights for each segment
         # Background segments get weight 1.0, others get subject_priority
@@ -160,22 +170,28 @@ class ColorQuantizer:
         k_allocated = np.maximum(2, np.round(proportions * k_total)).astype(int)
 
         # Adjust to match k_total exactly
-        while np.sum(k_allocated) > k_total:
-            # Reduce from the segment with largest k/proportion ratio
-            idx = np.argmax(k_allocated / proportions)
-            if k_allocated[idx] > 1:
-                k_allocated[idx] -= 1
-            else:
-                # If we can't reduce further, pick second best
-                temp_allocated = k_allocated.copy()
-                temp_allocated[idx] = -1
-                idx = np.argmax(temp_allocated / proportions)
-                k_allocated[idx] -= 1
+        for _ in range(k_total * 2):  # Bounded loop to prevent infinite risk
+            current_sum = np.sum(k_allocated)
+            if current_sum == k_total:
+                break
 
-        while np.sum(k_allocated) < k_total:
-            # Add to segment with smallest k/proportion ratio
-            idx = np.argmin(k_allocated / proportions)
-            k_allocated[idx] += 1
+            if current_sum > k_total:
+                # Reduce from segment with largest k/proportion ratio
+                idx = np.argmax(k_allocated / proportions)
+                if k_allocated[idx] > 1:
+                    k_allocated[idx] -= 1
+                else:
+                    # Fallback: find segment that IS > 1
+                    reducible = np.where(k_allocated > 1)[0]
+                    if len(reducible) == 0:
+                        break  # Cannot reduce further safely
+                    # Pick from reducible segments the one with largest ratio
+                    idx_in_reducible = np.argmax(k_allocated[reducible] / proportions[reducible])
+                    k_allocated[reducible[idx_in_reducible]] -= 1
+            else:
+                # Add to segment with smallest k/proportion ratio
+                idx = np.argmin(k_allocated / proportions)
+                k_allocated[idx] += 1
 
         # Collect palettes from each segment
         all_centers = []
@@ -200,9 +216,7 @@ class ColorQuantizer:
         pixels = lab_image.reshape(-1, 3)
 
         if albedo is not None:
-            albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
-            albedo_pixels = albedo_lab.reshape(-1, 3)
-            fit_pixels = material_weight * albedo_pixels + (1.0 - material_weight) * pixels
+            fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
         else:
             fit_pixels = pixels
 
@@ -329,21 +343,20 @@ class ColorQuantizer:
         else:
             k = max(self.min_k, num_colors)
 
-        # Use budget splitting if a segmentation mask is provided
-        if (
-            perception is not None
-            and perception.segmentation_mask is not None
-            and num_colors is not None
-            and num_colors >= 4
-        ):
+        # Use budget splitting if a segmentation mask is provided or requested via auto_mask
+        seg_mask = perception.segmentation_mask if perception else None
+        if seg_mask is None and perception and perception.use_auto_mask:
+            seg_mask = self._get_otsu_mask(image)
+
+        if seg_mask is not None and num_colors is not None and num_colors >= 4:
             return self.quantize_with_budget(
                 image,
                 k,
-                perception.segmentation_mask,
-                background_ids=perception.background_ids,
-                subject_priority=perception.subject_priority,
-                albedo=perception.albedo,
-                material_weight=perception.material_weight,
+                seg_mask,
+                background_ids=perception.background_ids if perception else [0],
+                subject_priority=perception.subject_priority if perception else 2.0,
+                albedo=perception.albedo if perception else None,
+                material_weight=perception.material_weight if perception else 0.5,
             )
 
         # Perform initial quantization (with optional albedo)
@@ -406,11 +419,7 @@ class ColorQuantizer:
 
             # Use albedo for final assignment if present
             if albedo is not None:
-                if albedo.shape[:2] != (h, w):
-                    albedo = cv2.resize(albedo, (w, h), interpolation=cv2.INTER_LINEAR)
-                albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
-                albedo_pixels = albedo_lab.reshape(-1, 3)
-                fit_pixels = material_weight * albedo_pixels + (1.0 - material_weight) * pixels
+                fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
             else:
                 fit_pixels = pixels
 
