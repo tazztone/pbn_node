@@ -2,7 +2,16 @@
 
 ## Purpose
 - Maintain the ComfyUI PBN node using V3 API and modular backend.
-- use the relevant 'comfyui-node-' development skills for your tasks.
+- Use 'comfyui-node-*' development skills for all node-related tasks.
+
+## Allowed without asking
+- Read files and run tests/linting.
+- Fix linting or type errors.
+- Update documentation to reflect code changes.
+
+## Ask first
+- Install new dependencies.
+- Significant architectural changes.
 
 ## Commands
 - Test: `../../venv/bin/python tests/run_tests.py`
@@ -24,3 +33,4 @@
 - `uvx ruff check .` and `uvx mypy .` pass with zero errors.
 - All tests pass via `run_tests.py`.
 - No regression in SVG "white-gap" issues.
+- **Docs updated**: README.md, ROADMAP.md, and TESTING.md reflect the changes (if needed).

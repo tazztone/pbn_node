@@ -10,95 +10,65 @@ We have categorized the following candidates into tiers based on their ROI
 (Return on Investment). Our goal is to move from a color-first pipeline to a
 perception-aware and content-aware system.
 
-| # | Feature | Effectiveness | Impl. Difficulty | ROI |
-|---|---|---|---|---|
-| 1 | **CIEDE2000** | 🟢 High | 🟢 Trivial (10 lines) | ★★★★★ |
-| 2 | **Shared Border SVG wiring** | 🟢 High | 🟢 Low (already scaffolded) | ★★★★★ |
-| 3 | **SLIC Superpixels** | 🟡 Medium-high | 🟢 Low (no GPU) | ★★★★☆ |
-| 4 | **Content-Aware Preprocessing** | 🟢 High (portraits) | 🟡 Moderate | ★★★★☆ |
-| 5 | **Depth Anything 3** | 🟢 High (landscapes) | 🟠 Moderate-hard | ★★★☆☆ |
-| 6 | **Interactive Palette Controls** | 🟡 UX only | 🟠 Hard (frontend) | ★★★☆☆ |
-| 7 | **SAM 3.1** | 🟢 Transformative | 🔴 Hard (arch. change) | ★★☆☆☆ |
-| 8 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (model tuning) | ★★☆☆☆ |
+| # | Feature | Effectiveness | Impl. Difficulty | Status | ROI |
+|---|---|---|---|---|---|
+| 1 | **CIEDE2000** | 🟢 High | 🟢 Trivial | ✅ Done | ★★★★★ |
+| 2 | **Shared Border SVG wiring** | 🟢 High | 🟢 Low | ✅ Done | ★★★★★ |
+| 3 | **SLIC Superpixels** | 🟡 Medium-high | 🟢 Low | ✅ Done | ★★★★☆ |
+| 4 | **Content-Aware Preprocessing** | 🟢 High (portraits) | 🟡 Moderate | ✅ Done | ★★★★☆ |
+| 5 | **Depth Anything 3** | 🟢 High (landscapes) | 🟠 Moderate-hard | 🟡 Partial | ★★★☆☆ |
+| 6 | **Interactive Palette Controls** | 🟡 UX only | 🟠 Hard (frontend) | 📅 Planned | ★★★☆☆ |
+| 7 | **SAM 3.1** | 🟢 Transformative | 🔴 Hard (arch. change) | 🧪 Research | ★★☆☆☆ |
+| 8 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (model tuning) | 🧪 Research | ★★☆☆☆ |
 
 ---
 
-## Tier 1: High impact, low effort
+## ✅ Completed Features
 
-These features provide immediate quality improvements with minimal architectural
-changes.
+These features have been implemented and are available in the current version.
 
 ### CIEDE2000 color distance
-Replacing Euclidean distance in LAB space with the `skimage.color.deltaE_ciede2000`
-formula. This provides perceptually correct palette selection, ensuring paint
-colors map more naturally to human perception.
-
-- **Status:** Recommended next step.
-- **Implementation:** pure drop-in in `quantizer.py`.
+Replaced Euclidean distance in LAB space with the `skimage.color.deltaE_ciede2000` formula. This provides perceptually correct palette selection, ensuring paint colors map more naturally to human perception.
 
 ### Shared border segmentation
-The core algorithmic work for shared border segmentation is already scaffolded.
-The remaining task is wiring these borders into the SVG path builder instead of
-drawing independent contours for each region.
-
-- **Status:** Already scaffolded in `segmenter.py`.
-- **Impact:** Eliminates the white-gap problem in SVG outputs.
+The SVG generator now uses shared borders instead of independent contours for each region. This eliminates the "white-gap" problem and produces perfectly aligned vector paths.
 
 ### SLIC superpixels
-Inserting `skimage.segmentation.slic()` into the pipeline to reduce pixel space
-to compact cells before clustering. This is a lightweight approach that doesn't
-require a GPU.
+Integrated `skimage.segmentation.slic()` into the pipeline to reduce pixel space to compact cells before clustering. This dramatically reduces speckle and isolates the quantizer from noise.
 
-- **Status:** Planned.
-- **Impact:** Dramatically reduces speckle and isolates the quantizer from noise.
+### Content-aware protection (Face detection)
+Implemented Mediapipe-based face detection to generate protection maps. This ensures high-frequency details in portraits are preserved during color quantization.
+
+### Budget Split (Foreground/Background)
+Implemented a color budget splitting mechanism using Otsu's thresholding to separate foreground and background. This allows allocating a larger portion of the color palette to the subject of the image.
+
+### Polylabel placement
+Implemented the Polylabel algorithm for optimal label positioning at the "pole of inaccessibility" (the most distant internal point from the polygon outline).
 
 ---
 
-## Tier 2: High impact, moderate effort
-
-These features require new dependencies or more complex logic but offer
-significant quality gains for specific use cases.
-
-### Content-aware preprocessing
-Adding optional face or object detection (for example, using Mediapipe or YOLO)
-to weight sampling during quantization. This ensures high-frequency details in
-portraits are protected.
-
-- **Status:** Under consideration.
-- **Impact:** Significant quality improvement for portraits.
+## 🚀 Future Roadmap
 
 ### Depth Anything 3 (DA3)
-Using DA3 to produce foreground/background masks and splitting the color budget
-proportionally. This transforms flat-background images and improves depth
-perception in the output.
+Replacing the current Otsu-based budget split with DA3 to produce more accurate foreground/background masks and splitting the color budget proportionally.
 
-- **Status:** Under consideration.
-- **Impact:** Excellent for landscapes and portraits.
-
----
-
-## Tier 3: High quality, high effort
-
-These features represent significant architectural changes or complex frontend
-development.
+- **Status:** Researching integration.
+- **Impact:** Excellent for landscapes and complex depth scenes.
 
 ### Interactive palette controls
-Building ComfyUI V3 widgets to let you manually merge or split colors. This
-requires deep integration with the ComfyUI frontend API.
+Building ComfyUI V3 widgets to let you manually merge or split colors. This requires deep integration with the ComfyUI frontend API.
 
 - **Status:** Long-term goal.
 - **Impact:** Improved user experience and manual control.
 
 ### SAM 3.1 (Segment Anything)
-Replacing the color-first segmentation with SAM's auto-mask generator to produce
-semantic regions (for example, sky, skin, or objects).
+Replacing the color-first segmentation with SAM's auto-mask generator to produce semantic regions (for example, sky, skin, or objects).
 
 - **Status:** Researching.
 - **Impact:** Potentially transformative for complex scenes.
 
 ### Learned edge detection
-Replacing morphological smoothing with models like DexiNed or HED to produce
-crisper, more artistically natural boundaries.
+Replacing morphological smoothing with models like DexiNed or HED to produce crisper, more artistically natural boundaries.
 
 - **Status:** Researching.
 - **Impact:** Cleanest SVG contours possible.
@@ -107,11 +77,7 @@ crisper, more artistically natural boundaries.
 
 We recommend proceeding in the following order to maximize ROI:
 
-1.  CIEDE2000
-2.  Shared Border wiring
-3.  SLIC Superpixels
-4.  Content-aware preprocessing
-5.  Depth Anything 3
-6.  Interactive Palette Controls
-7.  SAM 3.1
-8.  Learned Edge Detection
+1.  Depth Anything 3 (DA3) integration
+2.  Interactive Palette Controls
+3.  SAM 3.1
+4.  Learned Edge Detection
