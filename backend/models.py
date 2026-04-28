@@ -5,7 +5,7 @@ Defines core data structures used throughout the processing pipeline.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Literal, Optional, Set
 
 import networkx as nx
 import numpy as np
@@ -44,7 +44,7 @@ class ProcessingParameters:
     use_thin_cleanup: bool = True
     min_region_width: int = 5
     use_shared_borders: bool = True
-    label_mode: str = "polylabel"
+    label_mode: Literal["centroid", "polylabel"] = "polylabel"
     use_bezier_smooth: bool = False
     use_content_protect: bool = False
     use_budget_split: bool = False

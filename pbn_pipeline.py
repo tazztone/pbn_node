@@ -7,14 +7,10 @@ import time
 
 import cv2
 
-from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import ProcessingParameters, SVGResult
 from .backend.preprocessing.preprocessor import Preprocessor
-from .backend.preprocessing.protector import Protector
-from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
-from .backend.vectorization.vectorizer import Vectorizer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -28,11 +24,8 @@ class ImageProcessor:
     def __init__(self):
         """Initialize the image processor with all module instances."""
         self.preprocessor = Preprocessor()
-        self.protector = Protector()
-        self.quantizer = ColorQuantizer()
-        self.vectorizer = Vectorizer()
-        self.label_placer = LabelPlacer()
         self.svg_generator = SVGGenerator()
+        self.protector = None
 
     def process_array(
         self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None
@@ -61,6 +54,10 @@ class ImageProcessor:
             use_content_protect = getattr(params, "use_content_protect", False)
             protection_map = None
             if use_content_protect:
+                if self.protector is None:
+                    from .backend.preprocessing.protector import Protector
+
+                    self.protector = Protector()
                 logger.info("Generating content protection map")
                 protection_map = self.protector.generate_protection_map(preprocessed)
 
@@ -89,7 +86,13 @@ class ImageProcessor:
                 input_for_quantization = preprocessed
 
             # Make quantizer use protection map
-            self.quantizer.protection_map = protection_map
+            from .backend.quantization.quantizer import ColorQuantizer
+            quantizer = ColorQuantizer()
+            quantizer.protection_map = protection_map
+
+            # Apply configuration to quantizer
+            quantizer.use_palette_merge = getattr(params, "use_palette_merge", True)
+            quantizer.ciede2000_merge_thresh = getattr(params, "ciede2000_merge_thresh", 8.0)
 
             # Stage 3: Color Quantization
             logger.info("Stage 2/6: Quantizing colors")
@@ -131,15 +134,15 @@ class ImageProcessor:
 
                 # Fallback if one region is empty
                 if len(fg_pixels) == 0 or len(bg_pixels) == 0:
-                    quantized, palette = self.quantizer.quantize(input_for_quantization, k)
+                    quantized, palette = quantizer.quantize(input_for_quantization, k)
                 else:
                     # Create dummy images for the quantizer
                     # Quantizer expects a 2D image (H, W, 3). We can just reshape pixels to (N, 1, 3)
                     fg_img = fg_pixels.reshape(-1, 1, 3)
                     bg_img = bg_pixels.reshape(-1, 1, 3)
 
-                    _, fg_palette = self.quantizer.quantize(fg_img, k_fg)
-                    _, bg_palette = self.quantizer.quantize(bg_img, k_bg)
+                    _, fg_palette = quantizer.quantize(fg_img, k_fg)
+                    _, bg_palette = quantizer.quantize(bg_img, k_bg)
 
                     # Merge palettes
                     merged_colors_lab = np.vstack([fg_palette.colors, bg_palette.colors])
@@ -154,8 +157,29 @@ class ImageProcessor:
                     h, w = lab_image.shape[:2]
                     pixels = lab_image.reshape(-1, 3)
 
-                    diffs = pixels[:, np.newaxis, :] - merged_colors_lab[np.newaxis, :, :]
-                    dists = np.sum(diffs**2, axis=2)
+                    use_ciede2000 = getattr(params, "use_ciede2000", True)
+                    if use_ciede2000:
+                        import skimage.color
+
+                        def cv_to_std_lab(lab):
+                            std = np.zeros_like(lab)
+                            std[..., 0] = lab[..., 0] * 100.0 / 255.0
+                            std[..., 1] = lab[..., 1] - 128.0
+                            std[..., 2] = lab[..., 2] - 128.0
+                            return std
+
+                        std_pixels = cv_to_std_lab(pixels)
+                        std_colors = cv_to_std_lab(merged_colors_lab)
+
+                        K = merged_colors_lab.shape[0]
+                        dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+
+                        for k in range(K):
+                            dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+                    else:
+                        diffs = pixels[:, np.newaxis, :] - merged_colors_lab[np.newaxis, :, :]
+                        dists = np.sum(diffs**2, axis=2)
+
                     labels = np.argmin(dists, axis=1)
 
                     quantized_pixels = merged_colors_lab[labels]
@@ -174,13 +198,9 @@ class ImageProcessor:
                         color_count=len(merged_colors_lab),
                     )
             else:
-                quantized, palette = self.quantizer.quantize(
+                quantized, palette = quantizer.quantize(
                     input_for_quantization, params.num_colors
                 )
-
-            # Apply configuration to components
-            self.quantizer.use_palette_merge = getattr(params, "use_palette_merge", True)
-            self.quantizer.ciede2000_merge_thresh = getattr(params, "ciede2000_merge_thresh", 8.0)
 
             # Stage 4: Region Segmentation
             logger.info("Stage 3/6: Segmenting regions")
@@ -198,13 +218,15 @@ class ImageProcessor:
             logger.info("Stage 4/6: Vectorizing regions")
             if api:
                 api.execution.set_progress(4, 6)
-            self.vectorizer.use_bezier_smooth = getattr(params, "use_bezier_smooth", False)
-            vectorized_regions = self.vectorizer.vectorize(region_data, params.simplification)
+            from .backend.vectorization.vectorizer import Vectorizer
+            vectorizer = Vectorizer()
+            vectorizer.use_bezier_smooth = getattr(params, "use_bezier_smooth", False)
+            vectorized_regions = vectorizer.vectorize(region_data, params.simplification)
 
             # Optional: Remove speckles
             logger.info("Removing speckles")
-            cleaned_regions = self.vectorizer.remove_speckles(
-                vectorized_regions, palette.colors, threshold=self.vectorizer.speckle_threshold
+            cleaned_regions = vectorizer.remove_speckles(
+                vectorized_regions, palette.colors, threshold=vectorizer.speckle_threshold
             )
 
             # Renumber regions to have consecutive IDs (1, 2, 3, ...)
@@ -214,8 +236,10 @@ class ImageProcessor:
             logger.info("Stage 5/6: Placing labels")
             if api:
                 api.execution.set_progress(5, 6)
-            self.label_placer.label_mode = getattr(params, "label_mode", "polylabel")
-            label_data = self.label_placer.place_labels(cleaned_regions)
+            from .backend.labeling.label_placer import LabelPlacer
+            label_placer = LabelPlacer()
+            label_placer.label_mode = getattr(params, "label_mode", "polylabel")
+            label_data = label_placer.place_labels(cleaned_regions)
 
             # Stage 7: SVG Generation
             logger.info("Stage 6/6: Generating SVG")

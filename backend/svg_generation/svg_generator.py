@@ -108,8 +108,11 @@ class SVGGenerator:
                 for border in borders:
                     # Create a hashable representation of the LineString coordinates
                     coords = tuple(border.coords)
-                    # Coordinates could be reversed, so sort them to ensure uniqueness
-                    canonical_coords = tuple(sorted(coords))
+                    # A LineString can be traversed in two directions.
+                    # Sorting coordinates lexically scrambles the geometry, which is wrong.
+                    # We should check both original and reversed orders.
+                    rev = tuple(reversed(coords))
+                    canonical_coords = coords if coords <= rev else rev
 
                     if canonical_coords not in drawn_borders:
                         drawn_borders.add(canonical_coords)

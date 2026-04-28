@@ -147,6 +147,8 @@ class PaintByNumberNode(io.ComfyNode):
                 use_bezier_smooth = False
                 use_content_protect = True
                 use_budget_split = True
+            else:
+                raise ValueError(f"Unknown preset: {preset}")
 
         # image is [B, H, W, C] RGB float32
         batch_size = image.shape[0]

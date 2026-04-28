@@ -192,14 +192,7 @@ class ColorQuantizer:
         # Post-KMeans perceptual palette merge
         if self.use_palette_merge and len(centers_lab) > 1:
             import skimage.color
-
-            # Helper to convert cv2 LAB to standard LAB
-            def cv_to_std_lab(lab):
-                std = np.zeros_like(lab)
-                std[..., 0] = lab[..., 0] * 100.0 / 255.0
-                std[..., 1] = lab[..., 1] - 128.0
-                std[..., 2] = lab[..., 2] - 128.0
-                return std
+            from ..utils.color import cv_to_std_lab
 
             std_centers = cv_to_std_lab(centers_lab)
 
@@ -212,16 +205,23 @@ class ColorQuantizer:
 
                 cluster_group = [i]
                 used.add(i)
+                current_group_mean = std_centers[i].copy()
 
                 for j in range(i + 1, len(std_centers)):
                     if j in used:
                         continue
 
-                    # Compute CIEDE2000 distance
-                    dist = skimage.color.deltaE_ciede2000(std_centers[i], std_centers[j])
+                    # Compute CIEDE2000 distance against current group mean
+                    dist = skimage.color.deltaE_ciede2000(
+                        current_group_mean[np.newaxis, :], std_centers[[j]]
+                    )[0]
+
                     if dist < self.ciede2000_merge_thresh:
                         cluster_group.append(j)
                         used.add(j)
+                        # Update group mean
+                        # We can average the std_centers directly for the running mean comparison
+                        current_group_mean = np.mean(std_centers[cluster_group], axis=0)
 
                 # Average the merged LAB colors in standard LAB, then convert back?
                 # Actually, averaging in CV2 LAB is fine since it's a linear mapping.
