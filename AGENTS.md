@@ -30,7 +30,4 @@
 - Unit Test: [test_quantization.py](file:///home/tazztone/Applications/Data/Packages/ComfyUI/custom_nodes/pbn_node/tests/unit/test_quantization.py)
 
 ## Done criteria
-- `uvx ruff check .` and `uvx mypy .` pass with zero errors.
-- All tests pass via `run_tests.py`.
-- No regression in SVG "white-gap" issues.
 - **Docs updated**: README.md, ROADMAP.md, and TESTING.md reflect the changes (if needed).
