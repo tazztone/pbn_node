@@ -34,7 +34,7 @@ class PBNRenderer:
             palette: Color palette
             width: Image width
             height: Image height
-            mode: "colored" | "outline"
+            mode: "colored" | "outline" | "print_svg"
 
         Returns:
             Rendered image in BGR format
@@ -43,6 +43,7 @@ class PBNRenderer:
         if mode == "colored":
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
         else:
+            # Both "outline" and "print_svg" have white backgrounds
             canvas = np.ones((height, width, 3), dtype=np.uint8) * 255
 
         # 1. Fill regions
@@ -61,8 +62,8 @@ class PBNRenderer:
             points = np.array(polygon.exterior.coords, dtype=np.int32)
             cv2.fillPoly(canvas, [points], color)
 
-            # 2. Draw outlines for "outline" mode
-            if mode == "outline":
+            # 2. Draw outlines for "outline" and "print_svg" modes
+            if mode in ("outline", "print_svg"):
                 cv2.polylines(canvas, [points], True, (0, 0, 0), 1)
 
         # 3. Draw labels

@@ -18,8 +18,12 @@ class LabelPlacer:
     and font size calculation based on inscribed circle radius.
     """
 
-    def __init__(self):
-        """Initialize label placer with default parameters."""
+    def __init__(self, label_mode: str = "polylabel"):
+        """Initialize label placer with default parameters.
+
+        Args:
+            label_mode: "polylabel" or "centroid"
+        """
         self.initial_precision = 1.0
         self.min_precision = 0.01
         self.timeout_ms = 100
@@ -27,6 +31,7 @@ class LabelPlacer:
         self.min_font_size = 8
         self.max_font_size = 24
         self.font_size_factor = 0.6
+        self.label_mode = label_mode
 
     def polylabel_placement(self, polygon: Polygon, precision: float = 1.0) -> Point:
         """
@@ -151,7 +156,10 @@ class LabelPlacer:
 
             # Find optimal label position
             try:
-                label_position = self.polylabel_placement(polygon, self.initial_precision)
+                if self.label_mode == "polylabel":
+                    label_position = self.polylabel_placement(polygon, self.initial_precision)
+                else:
+                    label_position = polygon.centroid
 
                 # Verify position is within polygon
                 if not polygon.contains(label_position):

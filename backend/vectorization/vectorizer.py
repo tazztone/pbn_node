@@ -20,9 +20,14 @@ class Vectorizer:
     topology-preserving simplification, and speckle removal.
     """
 
-    def __init__(self):
-        """Initialize vectorizer with default parameters."""
+    def __init__(self, use_bezier_smooth: bool = False):
+        """Initialize vectorizer with default parameters.
+
+        Args:
+            use_bezier_smooth: Whether to fit cubic Bézier curves to simplified contours
+        """
         self.speckle_threshold = 0.001  # 0.1% of total area
+        self.use_bezier_smooth = use_bezier_smooth
 
     def find_contours(self, region_mask: np.ndarray) -> List[np.ndarray]:
         """
@@ -259,6 +264,10 @@ class Vectorizer:
                 tolerance_area = simplification**2
                 simplified_coords = self.visvalingam_whyatt(coords, tolerance_area)
 
+                # Bézier path smoothing
+                if self.use_bezier_smooth and len(simplified_coords) > 3:
+                    simplified_coords = self._apply_bezier_smoothing(simplified_coords)
+
                 # Create new polygon
                 if len(simplified_coords) >= 3:
                     simplified_polygon = Polygon(simplified_coords)
@@ -277,3 +286,74 @@ class Vectorizer:
                 simplified_regions[region_id] = polygon
 
         return simplified_regions
+
+    def _apply_bezier_smoothing(
+        self, coords: np.ndarray, num_points_per_curve: int = 5
+    ) -> np.ndarray:
+        """
+        Fits cubic Bézier curves to the given coordinates to smooth out sharp edges.
+        """
+        import bezier
+
+        # Flatten array if needed
+        if len(coords.shape) == 3:
+            coords = coords.reshape(-1, 2)
+
+        # Needs at least 4 points to do anything meaningful with cubic bezier
+        if len(coords) < 4:
+            return coords
+
+        smoothed_coords = []
+
+        # Ensure contour points don't just repeat the first at the end for iteration math
+        if np.array_equal(coords[0], coords[-1]):
+            coords = coords[:-1]
+
+        n = len(coords)
+        if n < 4:
+            return coords
+
+        # To smoothly close the polygon, we wrap around using modulo.
+        # However, to avoid sharp kinks at segments, we should step by 1 and use a
+        # continuous spline like Catmull-Rom or B-spline.
+        # Since we're using cubic beziers, we can step by 3 around the loop.
+        # But stepping by 3 means we only cover multiples of 3.
+        # To perfectly tile the closed loop, we can just pad the sequence to a multiple of 3
+        # using the front points, then run the bezier on the padded set.
+
+        # Calculate how many points we need to make (n - 1) a multiple of 3.
+        # We need (n_padded - 1) % 3 == 0.
+        # Number of segments = ceil((n-1)/3).
+        # We'll just step by 3 until we cover the loop and wrap back to the start.
+
+        for i in range(0, n, 3):
+            # The control points wrap around the polygon naturally
+            p0 = coords[i % n]
+            p1 = coords[(i + 1) % n]
+            p2 = coords[(i + 2) % n]
+            p3 = coords[(i + 3) % n]
+
+            nodes = np.asfortranarray(
+                [
+                    [p0[0], p1[0], p2[0], p3[0]],
+                    [p0[1], p1[1], p2[1], p3[1]],
+                ]
+            )
+
+            try:
+                curve = bezier.Curve(nodes, degree=3)
+                s_vals = np.linspace(0.0, 1.0, num_points_per_curve)
+                points = curve.evaluate_multi(s_vals).T
+
+                # If we are exactly at the end and closing to the start,
+                # we don't want to re-add the overlapping start vertex unless we are finishing.
+                # Actually, always appending [:-1] gives a seamless closed contour loop.
+                smoothed_coords.extend(points[:-1].tolist())
+            except Exception:
+                smoothed_coords.extend([p0.tolist(), p1.tolist(), p2.tolist()])
+
+        # Close the loop perfectly back to the start vertex
+        if len(smoothed_coords) > 0:
+            smoothed_coords.append(smoothed_coords[0])
+
+        return np.array(smoothed_coords)
