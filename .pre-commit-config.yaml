@@ -19,7 +19,6 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies:
-          - cv2-stubs
           - numpy
           - types-setuptools
           - types-requests

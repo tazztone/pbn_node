@@ -61,7 +61,10 @@ class PaintByNumberNode(io.ComfyNode):
                     "preset",
                     options=["fast", "balanced", "portrait", "custom"],
                     default="balanced",
-                    tooltip="Presets for advanced settings. Select 'custom' to use the manual advanced parameters below.",
+                    tooltip=(
+                        "Presets for advanced settings. Select 'custom' to use "
+                        "the manual advanced parameters below."
+                    ),
                 ),
                 io.Boolean.Input("use_slic", default=True, advanced=True),
                 io.Boolean.Input("use_ciede2000", default=True, advanced=True),

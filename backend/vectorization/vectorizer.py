@@ -15,6 +15,7 @@ from ..models import RegionData
 
 try:
     import bezier
+
     _HAS_BEZIER = True
 except ImportError:
     _HAS_BEZIER = False
@@ -205,7 +206,7 @@ class Vectorizer:
                     continue
 
                 region_color = colors[region_id - 1]
-                distance = np.linalg.norm(speckle_color - region_color)
+                distance = float(np.linalg.norm(speckle_color - region_color))
 
                 if distance < min_distance:
                     min_distance = distance

@@ -76,7 +76,7 @@ class ImageProcessor:
                 superpixel_img = skimage.color.label2rgb(
                     segments, preprocessed, kind="avg", bg_label=-1
                 )
-                # label2rgb returns float64 [0,1] or [0,255] depending on input, 
+                # label2rgb returns float64 [0,1] or [0,255] depending on input,
                 # but with kind='avg' and uint8 input it should be consistent.
                 # To be safe, ensure uint8.
                 superpixel_img = (superpixel_img).astype(np.uint8)
@@ -115,14 +115,15 @@ class ImageProcessor:
                 # Typically, Otsu gives one class 0 and another 255.
                 # Let's say foreground has more details, so we oversample it.
                 # But actually, the goal is: split color budget.
-                # Since we use KMeans, we can just assign weights. If we want 75% budget to foreground,
-                # we can duplicate foreground pixels in the array we pass, or we can partition the image,
-                # quantize separately, and combine.
+                # Since we use KMeans, we can just assign weights. If we want 75% budget
+                # to foreground, we can duplicate foreground pixels in the array we pass,
+                # or we can partition the image, quantize separately, and combine.
                 # The easiest robust way to "split budget" across a single KMeans fit is to
                 # strongly weight the foreground pixels so they attract more centers.
                 # However, the prompt says "allocate 25% budget to background, 75% to foreground".
-                # To do this exactly, we can split the image into fg/bg, quantize fg with 0.75*k colors,
-                # quantize bg with 0.25*k colors, and merge the palettes. Then requantize the whole image.
+                # To do this exactly, we can split the image into fg/bg, quantize fg with
+                # 0.75*k colors, quantize bg with 0.25*k colors, and merge the palettes.
+                # Then requantize the whole image.
                 # Let's do that.
 
                 k = params.num_colors
@@ -138,7 +139,8 @@ class ImageProcessor:
                     quantized, palette = quantizer.quantize(input_for_quantization, k)
                 else:
                     # Create dummy images for the quantizer
-                    # Quantizer expects a 2D image (H, W, 3). We can just reshape pixels to (N, 1, 3)
+                    # Quantizer expects a 2D image (H, W, 3).
+                    # We can just reshape pixels to (N, 1, 3)
                     fg_img = fg_pixels.reshape(-1, 1, 3)
                     bg_img = bg_pixels.reshape(-1, 1, 3)
 

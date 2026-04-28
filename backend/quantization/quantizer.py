@@ -34,7 +34,7 @@ class ColorQuantizer:
         self.use_palette_merge = use_palette_merge
         self.ciede2000_merge_thresh = ciede2000_merge_thresh
         self.use_ciede2000 = use_ciede2000
-        self.protection_map = None
+        self.protection_map: Optional[np.ndarray] = None
 
     def kmeans_lab(self, image: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -276,6 +276,10 @@ class ColorQuantizer:
             hex_color = "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
             hex_colors.append(hex_color)
 
-        palette = ColorPalette(colors=centers_lab, hex_colors=hex_colors, color_count=merged_k if 'merged_k' in locals() else k)
+        palette = ColorPalette(
+            colors=centers_lab,
+            hex_colors=hex_colors,
+            color_count=merged_k if "merged_k" in locals() else k,
+        )
 
         return quantized_image, palette

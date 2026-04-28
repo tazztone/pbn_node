@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import os
-import sys
 import subprocess
+import sys
+
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +21,7 @@ def main():
 
     result = subprocess.run(args, cwd=script_dir)
     sys.exit(result.returncode)
+
 
 if __name__ == "__main__":
     main()

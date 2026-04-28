@@ -1,9 +1,9 @@
 import os
 import sys
-import shutil
 from unittest.mock import MagicMock
-import pytest
+
 import numpy as np
+import pytest
 import torch
 
 # Add the parent of the custom node directory to path
@@ -24,17 +24,21 @@ if "comfy" not in sys.modules:
 
 # --- Mock comfy_api for V3 nodes ---
 
+
 class MockComfyNode:
     pass
+
 
 class MockSchema:
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+
 class MockNodeOutput(tuple):
     def __new__(cls, *args, **kwargs):
         return super().__new__(cls, args)
+
 
 class MockInputType:
     @staticmethod
@@ -42,10 +46,11 @@ class MockInputType:
         m = MagicMock(name=name)
         m.name = name
         return m
-    
+
     @staticmethod
     def Output(**kwargs):
         return MagicMock()
+
 
 class MockHidden:
     @staticmethod
@@ -54,10 +59,12 @@ class MockHidden:
         m.name = name
         return m
 
+
 class MockUI:
     @staticmethod
     def PreviewImage(*args, **kwargs):
         return MagicMock()
+
 
 # Build mock io module
 mock_io = MagicMock()
@@ -83,9 +90,11 @@ mock_comfy_api_latest = MagicMock()
 mock_comfy_api_latest.io = mock_io
 mock_comfy_api_latest.ui = mock_ui
 
+
 class MockComfyAPISync:
     def __init__(self):
         self.execution = MagicMock()
+
 
 mock_comfy_api_latest.ComfyAPISync = MockComfyAPISync
 
@@ -100,15 +109,17 @@ if "comfy_api.latest.ui" not in sys.modules:
 
 # --- FIXTURES ---
 
+
 @pytest.fixture
 def sample_image_np():
     """Create a 128x128 RGB numpy image."""
     img = np.zeros((128, 128, 3), dtype=np.uint8)
     # Add some colored rectangles
-    img[10:50, 10:50] = [255, 0, 0]    # Red
+    img[10:50, 10:50] = [255, 0, 0]  # Red
     img[60:110, 60:110] = [0, 255, 0]  # Green
-    img[10:50, 60:110] = [0, 0, 255]   # Blue
+    img[10:50, 60:110] = [0, 0, 255]  # Blue
     return img
+
 
 @pytest.fixture
 def sample_image_tensor():

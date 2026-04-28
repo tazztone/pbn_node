@@ -2,7 +2,7 @@
 SVG generation module for creating optimized paint-by-number templates.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from shapely.geometry import Polygon
 
@@ -26,7 +26,7 @@ class SVGGenerator:
         regions: Dict[int, Polygon],
         labels: LabelData,
         colors: ColorPalette,
-        shared_borders: Dict[int, List] = None,
+        shared_borders: Optional[Dict[int, List]] = None,
         use_shared_borders: bool = True,
         print_mode: bool = False,
     ) -> str:
@@ -73,8 +73,8 @@ class SVGGenerator:
             fill_color = "#ffffff" if print_mode else color_hex
 
             # If using shared borders, we don't need strokes on the fills unless it's print mode?
-            # Actually, in print mode, if use_shared_borders is true, we still draw strokes in the shared borders step.
-            # So fill stroke can be none.
+            # Actually, in print mode, if use_shared_borders is true, we still draw strokes in
+            # the shared borders step. So fill stroke can be none.
             fill_stroke = (
                 "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
             )

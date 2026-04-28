@@ -111,8 +111,8 @@ class RegionSegmenter:
                     right_val = row[end + 1] if end < w - 1 else -1
 
                     if left_val != -1 and right_val != -1:
-                        # Count total occurrences in row to pick dominant, or just pick left for simplicity
-                        # Let's pick left if they are different, or if they are the same pick that
+                        # Count total occurrences in row to pick dominant, or just pick left for
+                        # simplicity.
                         row[start : end + 1] = left_val
                     elif left_val != -1:
                         row[start : end + 1] = left_val
