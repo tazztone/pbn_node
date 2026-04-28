@@ -168,9 +168,9 @@ class ImageProcessor:
                         K = merged_colors_lab.shape[0]
                         dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
 
-                        for k in range(K):
-                            dists[:, k] = skimage.color.deltaE_ciede2000(
-                                std_pixels, std_colors[[k]]
+                        for ki in range(K):
+                            dists[:, ki] = skimage.color.deltaE_ciede2000(
+                                std_pixels, std_colors[[ki]]
                             )
                     else:
                         diffs = pixels[:, np.newaxis, :] - merged_colors_lab[np.newaxis, :, :]
@@ -202,9 +202,9 @@ class ImageProcessor:
                 api.execution.set_progress(3, 6)
             segmenter = RegionSegmenter(
                 use_watershed=params.use_watershed,
-                use_ciede2000=getattr(params, "use_ciede2000", True),
-                use_thin_cleanup=getattr(params, "use_thin_cleanup", True),
-                min_region_width=getattr(params, "min_region_width", 5),
+                use_ciede2000=params.use_ciede2000,
+                use_thin_cleanup=params.use_thin_cleanup,
+                min_region_width=params.min_region_width,
             )
             region_data = segmenter.segment(quantized, palette.colors)
 
@@ -240,8 +240,8 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(6, 6)
 
-            # Pass shared borders to SVG generator if available
-            shared_borders = getattr(region_data, "shared_borders", None)
+            # Pass shared borders to SVG generator
+            shared_borders = region_data.shared_borders
 
             svg_content = self.svg_generator.generate_svg(
                 cleaned_regions,

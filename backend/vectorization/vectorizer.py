@@ -304,11 +304,31 @@ class Vectorizer:
             return coords
 
         smoothed_coords = []
-        n = len(coords)
 
-        # Iterate over points 3 at a time (overlapping) to fit cubic beziers
-        for i in range(0, n - 3, 3):
-            p0 = coords[i]
+        # Ensure contour points don't just repeat the first at the end for iteration math
+        if np.array_equal(coords[0], coords[-1]):
+            coords = coords[:-1]
+
+        n = len(coords)
+        if n < 4:
+            return coords
+
+        # To smoothly close the polygon, we wrap around using modulo.
+        # However, to avoid sharp kinks at segments, we should step by 1 and use a
+        # continuous spline like Catmull-Rom or B-spline.
+        # Since we're using cubic beziers, we can step by 3 around the loop.
+        # But stepping by 3 means we only cover multiples of 3.
+        # To perfectly tile the closed loop, we can just pad the sequence to a multiple of 3
+        # using the front points, then run the bezier on the padded set.
+
+        # Calculate how many points we need to make (n - 1) a multiple of 3.
+        # We need (n_padded - 1) % 3 == 0.
+        # Number of segments = ceil((n-1)/3).
+        # We'll just step by 3 until we cover the loop and wrap back to the start.
+
+        for i in range(0, n, 3):
+            # The control points wrap around the polygon naturally
+            p0 = coords[i % n]
             p1 = coords[(i + 1) % n]
             p2 = coords[(i + 2) % n]
             p3 = coords[(i + 3) % n]
@@ -322,26 +342,18 @@ class Vectorizer:
 
             try:
                 curve = bezier.Curve(nodes, degree=3)
-                # Sample points along the curve
                 s_vals = np.linspace(0.0, 1.0, num_points_per_curve)
-                points = curve.evaluate_multi(s_vals)
-                # points is 2xN array, transpose to Nx2
-                points = points.T
+                points = curve.evaluate_multi(s_vals).T
 
-                # Append all except the last point to avoid duplicates
+                # If we are exactly at the end and closing to the start,
+                # we don't want to re-add the overlapping start vertex unless we are finishing.
+                # Actually, always appending [:-1] gives a seamless closed contour loop.
                 smoothed_coords.extend(points[:-1].tolist())
             except Exception:
-                # If bezier fitting fails for some reason, just append the original points
                 smoothed_coords.extend([p0.tolist(), p1.tolist(), p2.tolist()])
 
-        # Handle remaining points
-        remainder = (n - 1) % 3
-        if remainder > 0:
-            for i in range(n - 1 - remainder, n):
-                smoothed_coords.append(coords[i].tolist())
-
-        # Close the loop
-        if len(smoothed_coords) > 0 and smoothed_coords[0] != smoothed_coords[-1]:
+        # Close the loop perfectly back to the start vertex
+        if len(smoothed_coords) > 0:
             smoothed_coords.append(smoothed_coords[0])
 
         return np.array(smoothed_coords)
