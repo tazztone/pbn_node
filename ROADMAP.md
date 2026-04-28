@@ -32,6 +32,7 @@ perception-aware and content-aware system.
 | 18 | **Interactive Palette Controls**| 🟡 UX only | 🟠 Hard (frontend)| 📅 Planned | ★★★☆☆ |
 | 19 | **SAM 3.1 / DA3 / Sapiens2** | 🟢 Transformative | 🔴 Hard (research) | 🧪 Research | ★★☆☆☆ |
 | 20 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (research) | 🧪 Research | ★★☆☆☆ |
+| 21 | **Custom Output Export** | 🟢 Utility | 🟢 Low | 📅 Planned | ★★★★☆ |
 
 ---
 
@@ -210,6 +211,18 @@ extremely clean (flat vector) input images.
 
 ---
 
+### Custom Output Export
+
+Add an optional `output_path` parameter to the node. If provided, the generated
+SVG and a high-resolution PNG of the template will be saved to that directory.
+This allows users to bypass the ComfyUI temp directory and directly organize
+their printable assets.
+
+- **Status:** Planned.
+- **Impact:** High utility for physical painters.
+
+---
+
 ### Interactive palette controls
 Building ComfyUI V3 widgets to let you manually merge or split colors. This
 requires deep integration with the ComfyUI frontend API.
@@ -245,8 +258,9 @@ crisper, more artistically natural boundaries.
 1. **Palette merge defaults + palette chart** — UX polish, low effort
 2. **Content-Aware Budget Split** — unblocks generic mask support
 3. **Exposed Clean-up Controls** — power-user flexibility
-4. **Perceptual Palette Sorting** — labeling polish
-5. **Lineart exclusion + numbers_density** — labeling polish
-6. **Label Collision Avoidance** — final labeling refinement
-7. **Interactive palette controls** — long-term UX
-8. **Research track (SAM/DA3/Learned Edges)** — experimental features
+4. **Custom Output Export** — asset management, low effort
+5. **Perceptual Palette Sorting** — labeling polish
+6. **Lineart exclusion + numbers_density** — labeling polish
+7. **Label Collision Avoidance** — final labeling refinement
+8. **Interactive palette controls** — long-term UX
+9. **Research track (SAM/DA3/Learned Edges)** — experimental features
