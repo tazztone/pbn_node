@@ -36,10 +36,31 @@ class ProcessingParameters:
     simplification: float = 1.0  # 0.5-2.0 pixel tolerance
     use_watershed: bool = False  # Whether to use watershed segmentation (slower but original spec)
 
+    # Advanced parameters
+    use_slic: bool = True
+    use_ciede2000: bool = True
+    use_palette_merge: bool = True
+    ciede2000_merge_thresh: float = 8.0
+    use_thin_cleanup: bool = True
+    min_region_width: int = 5
+    use_shared_borders: bool = True
+    label_mode: str = "polylabel"
+    use_bezier_smooth: bool = False
+    use_content_protect: bool = False
+    use_budget_split: bool = False
+    preset: str = "balanced"
+    output_mode: str = "colored"
+
     def __post_init__(self):
         # Validate simplification range
         if not (0.5 <= self.simplification <= 2.0):
             raise ValueError("Simplification must be between 0.5 and 2.0")
+        if not (2.0 <= self.ciede2000_merge_thresh <= 20.0):
+            raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
+        if not (2 <= self.min_region_width <= 20):
+            raise ValueError("min_region_width must be between 2 and 20")
+        if self.label_mode not in ["centroid", "polylabel"]:
+            raise ValueError("label_mode must be 'centroid' or 'polylabel'")
 
 
 @dataclass

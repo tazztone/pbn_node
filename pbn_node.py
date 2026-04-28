@@ -47,16 +47,45 @@ class PaintByNumberNode(io.ComfyNode):
                     "use_watershed",
                     default=False,
                     tooltip=(
-                        "Use watershed segmentation. "
-                        "Slower but more accurate for complex images."
+                        "Use watershed segmentation. Slower but more accurate for complex images."
                     ),
                 ),
                 io.Combo.Input(
                     "output_mode",
-                    options=["colored", "outline", "quantized"],
+                    options=["colored", "outline", "quantized", "print_svg"],
                     default="colored",
                     tooltip="Choose the visualization style of the result.",
                 ),
+                # Phase 5 inputs
+                io.Combo.Input(
+                    "preset",
+                    options=["fast", "balanced", "portrait", "custom"],
+                    default="balanced",
+                    tooltip="Presets for advanced settings. Select 'custom' to use the manual advanced parameters below.",
+                ),
+                io.Boolean.Input("use_slic", default=True, advanced=True),
+                io.Boolean.Input("use_ciede2000", default=True, advanced=True),
+                io.Boolean.Input("use_palette_merge", default=True, advanced=True),
+                io.Float.Input(
+                    "ciede2000_merge_thresh",
+                    default=8.0,
+                    min=2.0,
+                    max=20.0,
+                    step=0.5,
+                    advanced=True,
+                ),
+                io.Boolean.Input("use_thin_cleanup", default=True, advanced=True),
+                io.Int.Input("min_region_width", default=5, min=2, max=20, advanced=True),
+                io.Boolean.Input("use_shared_borders", default=True, advanced=True),
+                io.Combo.Input(
+                    "label_mode",
+                    options=["centroid", "polylabel"],
+                    default="polylabel",
+                    advanced=True,
+                ),
+                io.Boolean.Input("use_bezier_smooth", default=False, advanced=True),
+                io.Boolean.Input("use_content_protect", default=False, advanced=True),
+                io.Boolean.Input("use_budget_split", default=False, advanced=True),
             ],
             outputs=[
                 io.Image.Output("IMAGE", tooltip="The rendered paint-by-number image."),
@@ -74,7 +103,51 @@ class PaintByNumberNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, image, num_colors, simplification, use_watershed, output_mode):
+    def execute(
+        cls,
+        image,
+        num_colors,
+        simplification,
+        use_watershed,
+        output_mode,
+        preset="balanced",
+        use_slic=True,
+        use_ciede2000=True,
+        use_palette_merge=True,
+        ciede2000_merge_thresh=8.0,
+        use_thin_cleanup=True,
+        min_region_width=5,
+        use_shared_borders=True,
+        label_mode="polylabel",
+        use_bezier_smooth=False,
+        use_content_protect=False,
+        use_budget_split=False,
+    ):
+        # Apply presets
+        if preset != "custom":
+            if preset == "fast":
+                use_slic = False
+                use_ciede2000 = True
+                use_palette_merge = True
+                use_bezier_smooth = False
+            elif preset == "balanced":
+                use_slic = True
+                use_ciede2000 = True
+                use_palette_merge = True
+                use_thin_cleanup = True
+                use_shared_borders = True
+                use_bezier_smooth = False
+                use_content_protect = False
+            elif preset == "portrait":
+                use_slic = True
+                use_ciede2000 = True
+                use_palette_merge = True
+                use_thin_cleanup = True
+                use_shared_borders = True
+                use_bezier_smooth = False
+                use_content_protect = True
+                use_budget_split = True
+
         # image is [B, H, W, C] RGB float32
         batch_size = image.shape[0]
         result_images = []
@@ -89,6 +162,19 @@ class PaintByNumberNode(io.ComfyNode):
             num_colors=num_colors if num_colors > 0 else None,
             simplification=simplification,
             use_watershed=use_watershed,
+            use_slic=use_slic,
+            use_ciede2000=use_ciede2000,
+            use_palette_merge=use_palette_merge,
+            ciede2000_merge_thresh=ciede2000_merge_thresh,
+            use_thin_cleanup=use_thin_cleanup,
+            min_region_width=min_region_width,
+            use_shared_borders=use_shared_borders,
+            label_mode=label_mode,
+            use_bezier_smooth=use_bezier_smooth,
+            use_content_protect=use_content_protect,
+            use_budget_split=use_budget_split,
+            preset=preset,
+            output_mode=output_mode,
         )
 
         for i in range(batch_size):

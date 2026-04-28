@@ -18,7 +18,7 @@ class ColorQuantizer:
     accurate LAB color space with automatic k selection.
     """
 
-    def __init__(self):
+    def __init__(self, use_palette_merge: bool = True, ciede2000_merge_thresh: float = 8.0):
         """Initialize quantizer with default parameters."""
         self.min_k = 2
         self.max_k = 40
@@ -26,10 +26,13 @@ class ColorQuantizer:
         self.max_iterations = 100
         self.monochrome_variance_threshold = 0.05  # 5%
         self.monochrome_k = 3
+        self.use_palette_merge = use_palette_merge
+        self.ciede2000_merge_thresh = ciede2000_merge_thresh
+        self.protection_map = None
 
     def kmeans_lab(self, image: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Perform K-means clustering in LAB color space.
+        Perform K-means clustering in LAB color space with saturation-biased sampling.
 
         Args:
             image: Input image (BGR format)
@@ -45,12 +48,34 @@ class ColorQuantizer:
         h, w = lab_image.shape[:2]
         pixels = lab_image.reshape(-1, 3).astype(np.float32)
 
-        # Perform K-means clustering with k-means++ initialization
+        # Calculate chroma (saturation) in LAB space: sqrt(a^2 + b^2)
+        # In OpenCV LAB, a and b are offset by 128
+        a = pixels[:, 1] - 128.0
+        b = pixels[:, 2] - 128.0
+        chroma = np.sqrt(a**2 + b**2)
+
+        # Add a small base weight to prevent dark/gray areas from being ignored entirely
+        weights = chroma + 10.0
+
+        if self.protection_map is None:
+            final_weights = weights
+        else:
+            # Flatten protection map and multiply with chroma weights
+            pm_flat = self.protection_map.flatten()
+            if len(pm_flat) == len(weights):
+                final_weights = weights * pm_flat
+            else:
+                final_weights = weights
+
+        # Perform K-means clustering with k-means++ initialization, passing weights
         kmeans = KMeans(
             n_clusters=k, init="k-means++", max_iter=self.max_iterations, n_init=10, random_state=42
         )
-        labels = kmeans.fit_predict(pixels)
+        kmeans.fit(pixels, sample_weight=final_weights)
         centers = kmeans.cluster_centers_
+
+        # Predict labels for all pixels (without weights) to create the quantized image
+        labels = kmeans.predict(pixels)
 
         # Create quantized image
         quantized_pixels = centers[labels]
@@ -163,6 +188,63 @@ class ColorQuantizer:
 
         # Perform quantization
         quantized_image, centers_lab = self.kmeans_lab(image, k)
+
+        # Post-KMeans perceptual palette merge
+        if self.use_palette_merge and len(centers_lab) > 1:
+            import skimage.color
+
+            # Helper to convert cv2 LAB to standard LAB
+            def cv_to_std_lab(lab):
+                std = np.zeros_like(lab)
+                std[..., 0] = lab[..., 0] * 100.0 / 255.0
+                std[..., 1] = lab[..., 1] - 128.0
+                std[..., 2] = lab[..., 2] - 128.0
+                return std
+
+            std_centers = cv_to_std_lab(centers_lab)
+
+            merged_centers = []
+            used = set()
+
+            for i in range(len(std_centers)):
+                if i in used:
+                    continue
+
+                cluster_group = [i]
+                used.add(i)
+
+                for j in range(i + 1, len(std_centers)):
+                    if j in used:
+                        continue
+
+                    # Compute CIEDE2000 distance
+                    dist = skimage.color.deltaE_ciede2000(std_centers[i], std_centers[j])
+                    if dist < self.ciede2000_merge_thresh:
+                        cluster_group.append(j)
+                        used.add(j)
+
+                # Average the merged LAB colors in standard LAB, then convert back?
+                # Actually, averaging in CV2 LAB is fine since it's a linear mapping.
+                merged_lab = np.mean(centers_lab[cluster_group], axis=0)
+                merged_centers.append(merged_lab)
+
+            centers_lab = np.array(merged_centers, dtype=np.float32)
+
+            # Re-quantize the image with the merged centers
+            lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
+            h, w = lab_image.shape[:2]
+            pixels = lab_image.reshape(-1, 3)
+
+            # Assign pixels to the closest new merged center using standard euclidean distance
+            diffs = pixels[:, np.newaxis, :] - centers_lab[np.newaxis, :, :]
+            dists = np.sum(diffs**2, axis=2)
+            labels = np.argmin(dists, axis=1)
+
+            quantized_pixels = centers_lab[labels]
+            quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
+            quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
+
+            k = len(centers_lab)
 
         # Convert LAB centers to RGB for hex representation
         centers_lab_uint8 = centers_lab.astype(np.uint8).reshape(1, -1, 3)

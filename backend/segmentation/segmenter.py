@@ -18,7 +18,13 @@ class RegionSegmenter:
     Shared Border Segmentation algorithm to eliminate gaps between regions.
     """
 
-    def __init__(self, use_watershed: bool = False):
+    def __init__(
+        self,
+        use_watershed: bool = False,
+        use_ciede2000: bool = True,
+        use_thin_cleanup: bool = True,
+        min_region_width: int = 5,
+    ):
         """
         Initialize segmenter with configuration options.
 
@@ -26,9 +32,15 @@ class RegionSegmenter:
             use_watershed: Whether to use watershed transform (default: False)
                           When False, uses direct color-based segmentation for better performance
                           When True, uses watershed with cluster centers as markers (original spec)
+            use_ciede2000: Whether to use perceptually accurate CIEDE2000 distance
+            use_thin_cleanup: Whether to run thin-region scanline cleanup
+            min_region_width: Minimum width for regions to be preserved in scanline cleanup
         """
         self.min_distance = 10  # Minimum distance for peak detection
         self.use_watershed = use_watershed
+        self.use_ciede2000 = use_ciede2000
+        self.use_thin_cleanup = use_thin_cleanup
+        self.min_region_width = min_region_width
 
     def watershed_transform(self, quantized: np.ndarray, markers: np.ndarray) -> np.ndarray:
         """
@@ -62,10 +74,82 @@ class RegionSegmenter:
         # Step 2: Apply vectorized majority filter (smoothing)
         smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
 
+        # Step 2.5: Thin-region scanline removal
+        if self.use_thin_cleanup:
+            smoothed = self._thin_region_cleanup(smoothed, self.min_region_width)
+
         # Step 3: Apply pbnify's getLabelLocs function (flood-fill + region filtering)
         regions_matrix = self._get_regions_pbnify(smoothed)
 
         return regions_matrix
+
+    def _thin_region_cleanup(self, mat: np.ndarray, min_width: int) -> np.ndarray:
+        """
+        Horizontal and vertical scanline pass to merge ribbon regions
+        below min_width with their dominant neighbor.
+        """
+        h, w = mat.shape
+        cleaned = mat.copy()
+
+        # Horizontal scanline
+        for y in range(h):
+            row = cleaned[y, :]
+            # Find run lengths
+            runs = []
+            start = 0
+            for x in range(1, w):
+                if row[x] != row[x - 1]:
+                    runs.append((start, x - 1, row[start]))
+                    start = x
+            runs.append((start, w - 1, row[start]))
+
+            for start, end, val in runs:
+                width = end - start + 1
+                if width < min_width:
+                    # Find dominant neighbor
+                    left_val = row[start - 1] if start > 0 else -1
+                    right_val = row[end + 1] if end < w - 1 else -1
+
+                    if left_val != -1 and right_val != -1:
+                        # Count total occurrences in row to pick dominant, or just pick left for simplicity
+                        # Let's pick left if they are different, or if they are the same pick that
+                        row[start : end + 1] = left_val
+                    elif left_val != -1:
+                        row[start : end + 1] = left_val
+                    elif right_val != -1:
+                        row[start : end + 1] = right_val
+
+            cleaned[y, :] = row
+
+        # Vertical scanline
+        for x in range(w):
+            col = cleaned[:, x]
+            # Find run lengths
+            runs = []
+            start = 0
+            for y in range(1, h):
+                if col[y] != col[y - 1]:
+                    runs.append((start, y - 1, col[start]))
+                    start = y
+            runs.append((start, h - 1, col[start]))
+
+            for start, end, val in runs:
+                width = end - start + 1
+                if width < min_width:
+                    # Find dominant neighbor
+                    top_val = col[start - 1] if start > 0 else -1
+                    bottom_val = col[end + 1] if end < h - 1 else -1
+
+                    if top_val != -1 and bottom_val != -1:
+                        col[start : end + 1] = top_val
+                    elif top_val != -1:
+                        col[start : end + 1] = top_val
+                    elif bottom_val != -1:
+                        col[start : end + 1] = bottom_val
+
+            cleaned[:, x] = col
+
+        return cleaned
 
     def _create_color_id_matrix(self, quantized: np.ndarray, colors: np.ndarray) -> np.ndarray:
         """
@@ -80,10 +164,34 @@ class RegionSegmenter:
         # Reshape image to (H*W, 3)
         pixels = quantized_lab.reshape(-1, 3)
 
-        # Calculate squared Euclidean distances to each color center
-        # (H*W, 1, 3) - (1, K, 3) -> (H*W, K, 3) -> sum -> (H*W, K)
-        diffs = pixels[:, np.newaxis, :] - colors[np.newaxis, :, :]
-        dists = np.sum(diffs**2, axis=2)
+        if self.use_ciede2000:
+            import skimage.color
+
+            # Convert OpenCV LAB (L: 0-255, a: 0-255, b: 0-255) to standard LAB
+            def cv_to_std_lab(lab):
+                std = np.zeros_like(lab)
+                std[..., 0] = lab[..., 0] * 100.0 / 255.0
+                std[..., 1] = lab[..., 1] - 128.0
+                std[..., 2] = lab[..., 2] - 128.0
+                return std
+
+            std_pixels = cv_to_std_lab(pixels)
+            std_colors = cv_to_std_lab(colors)
+
+            # (H*W, 3) and (K, 3) -> we need dists (H*W, K)
+            K = colors.shape[0]
+            dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+
+            for k in range(K):
+                # ciede2000 takes (..., 3) arrays
+                dists[:, k] = skimage.color.deltaE_ciede2000(
+                    std_pixels, np.tile(std_colors[k], (pixels.shape[0], 1))
+                )
+        else:
+            # Calculate squared Euclidean distances to each color center
+            # (H*W, 1, 3) - (1, K, 3) -> (H*W, K, 3) -> sum -> (H*W, K)
+            diffs = pixels[:, np.newaxis, :] - colors[np.newaxis, :, :]
+            dists = np.sum(diffs**2, axis=2)
 
         # Find closest color ID for each pixel
         closest_ids = np.argmin(dists, axis=1) + 1  # 1-indexed
@@ -118,7 +226,7 @@ class RegionSegmenter:
     def _get_regions_pbnify(self, mat: np.ndarray) -> np.ndarray:
         """
         Exact implementation of pbnify's getLabelLocs logic.
-        Finds connected regions and removes small ones.
+        Finds connected regions and removes small ones or regions with severe convexity deficits.
         """
         h, w = mat.shape
         covered = np.zeros((h, w), dtype=bool)
@@ -132,14 +240,28 @@ class RegionSegmenter:
                     # Get connected region
                     region = self._get_region_pbnify(mat, covered, x, y, w, h)
 
-                    if len(region["x"]) > min_region_size:
+                    keep_region = len(region["x"]) > min_region_size
+
+                    # Convexity deficit filter
+                    if keep_region:
+                        points = np.array([region["x"], region["y"]]).T
+                        if len(points) >= 3:
+                            # Use cv2.convexHull to get the area
+                            hull = cv2.convexHull(points)
+                            hull_area = cv2.contourArea(hull)
+                            if hull_area > 0:
+                                area = len(region["x"])
+                                if area / hull_area < 0.15:
+                                    keep_region = False
+
+                    if keep_region:
                         # Keep this region - assign it a region ID
                         for i in range(len(region["x"])):
                             px, py = region["x"][i], region["y"][i]
                             regions_matrix[py, px] = next_region_id
                         next_region_id += 1
                     else:
-                        # Remove small region (merge with neighbor)
+                        # Remove small or convoluted region (merge with neighbor)
                         self._remove_region_pbnify(mat, region)
 
         return regions_matrix

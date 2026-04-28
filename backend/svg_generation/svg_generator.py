@@ -22,7 +22,13 @@ class SVGGenerator:
         self.default_stroke_color = "#000000"
 
     def generate_svg(
-        self, regions: Dict[int, Polygon], labels: LabelData, colors: ColorPalette
+        self,
+        regions: Dict[int, Polygon],
+        labels: LabelData,
+        colors: ColorPalette,
+        shared_borders: Dict[int, List] = None,
+        use_shared_borders: bool = True,
+        print_mode: bool = False,
     ) -> str:
         """
         Generate complete SVG content.
@@ -31,6 +37,9 @@ class SVGGenerator:
             regions: Dictionary of region ID to Polygon
             labels: LabelData with positions and font sizes
             colors: ColorPalette with color information
+            shared_borders: Dictionary mapping region IDs to lists of shared LineStrings
+            use_shared_borders: Whether to use shared borders for stroke
+            print_mode: If True, all fills are white and strokes are black
 
         Returns:
             Complete SVG as string
@@ -61,14 +70,52 @@ class SVGGenerator:
 
         # Generate paths for each color group
         for color_hex, region_ids in grouped_paths.items():
-            svg_parts.append(f'  <g fill="{color_hex}" stroke="{self.default_stroke_color}" ')
-            svg_parts.append(f'stroke-width="{self.default_stroke_width}">\n')
+            fill_color = "#ffffff" if print_mode else color_hex
+
+            # If using shared borders, we don't need strokes on the fills unless it's print mode?
+            # Actually, in print mode, if use_shared_borders is true, we still draw strokes in the shared borders step.
+            # So fill stroke can be none.
+            fill_stroke = (
+                "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
+            )
+            stroke_width_attr = (
+                "" if fill_stroke == "none" else f' stroke-width="{self.default_stroke_width}"'
+            )
+
+            svg_parts.append(
+                f'  <g fill="{fill_color}" stroke="{fill_stroke}"{stroke_width_attr}>\n'
+            )
 
             for region_id in region_ids:
                 if region_id in regions:
                     polygon = regions[region_id]
                     path_data = self._polygon_to_path(polygon)
                     svg_parts.append(f'    <path d="{path_data}" />\n')
+
+            svg_parts.append("  </g>\n")
+
+        # Add shared borders if enabled
+        if use_shared_borders and shared_borders:
+            svg_parts.append(f'  <g fill="none" stroke="{self.default_stroke_color}" ')
+            svg_parts.append(f'stroke-width="{self.default_stroke_width}">\n')
+
+            # Use a set to avoid drawing the same border twice
+            drawn_borders = set()
+
+            for region_id, borders in shared_borders.items():
+                if region_id not in regions:
+                    continue
+                for border in borders:
+                    # Create a hashable representation of the LineString coordinates
+                    coords = tuple(border.coords)
+                    # Coordinates could be reversed, so sort them to ensure uniqueness
+                    canonical_coords = tuple(sorted(coords))
+
+                    if canonical_coords not in drawn_borders:
+                        drawn_borders.add(canonical_coords)
+                        path_data = self._linestring_to_path(border)
+                        if path_data:
+                            svg_parts.append(f'    <path d="{path_data}" />\n')
 
             svg_parts.append("  </g>\n")
 
@@ -200,5 +247,23 @@ class SVGGenerator:
 
         # Close path
         path_parts.append(" Z")
+
+        return "".join(path_parts)
+
+    def _linestring_to_path(self, line) -> str:
+        """
+        Convert Shapely LineString to SVG path data.
+        """
+        coords = list(line.coords)
+        if not coords:
+            return ""
+
+        x0, y0 = coords[0][0], coords[0][1]
+        path_parts = [f"M {x0:.{self.coordinate_precision}f},{y0:.{self.coordinate_precision}f}"]
+
+        for x, y in coords[1:]:
+            path_parts.append(
+                f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}"
+            )
 
         return "".join(path_parts)
