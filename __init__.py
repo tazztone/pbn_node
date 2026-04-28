@@ -10,3 +10,7 @@ class PBNExtension(ComfyExtension):
 
 async def comfy_entrypoint() -> PBNExtension:
     return PBNExtension()
+
+
+WEB_DIRECTORY = "./js"
+__all__ = ["comfy_entrypoint", "WEB_DIRECTORY"]

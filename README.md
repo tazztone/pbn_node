@@ -1,8 +1,8 @@
 # ComfyUI paint by number
 
-ComfyUI paint by number is a custom node for ComfyUI that transforms your digital
-images into high-quality, printable paint-by-number templates. It lets you
-generate vector-aligned regions with accurate labels directly within your
+ComfyUI paint by number is a custom node for ComfyUI that transforms your
+digital images into high-quality, printable paint-by-number templates. It lets
+you generate vector-aligned regions with accurate labels directly within your
 ComfyUI workflows.
 
 ## Features
@@ -21,6 +21,8 @@ results.
   number of colors for your image if you don't specify a count.
 - **SVG export:** Generates raw SVG content that you can use in vector editing
   software like Inkscape or Adobe Illustrator.
+- **Vector preview:** Real-time, resolution-independent SVG preview directly
+  within the ComfyUI node body.
 
 ## Installation
 
@@ -70,7 +72,8 @@ The node accepts several configuration parameters to fine-tune the result.
 The node returns three values that you can use in your workflow.
 
 - **IMAGE:** The rendered raster template based on your selected output mode.
-- **SVG:** A string containing the raw SVG data for the generated template.
+- **SVG:** A string containing the raw SVG data for the generated template. This
+  result is also previewed as a vector graphic within the node UI.
 - **COLOR_COUNT:** An integer representing the total number of colors used in
   the final palette.
 
@@ -116,6 +119,18 @@ run them manually on all files at any time:
 ```bash
 pre-commit run --all-files
 ```
+
+### Automated testing
+
+We use `pytest` for unit and integration testing. To ensure all mocks load
+correctly, you must run tests using the provided wrapper script:
+
+```bash
+../../venv/bin/python tests/run_tests.py
+```
+
+For more details on the testing infrastructure, see
+[tests/TESTING.md](tests/TESTING.md).
 
 ## Next steps
 

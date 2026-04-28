@@ -38,6 +38,7 @@ tests/
 ├── pytest.ini           # Local configuration for path isolation
 ├── run_tests.py         # Wrapper script for environment setup
 ├── unit/                # Fast tests for individual backend modules
+│   ├── test_pbn_node.py
 │   ├── test_preprocessing.py
 │   ├── test_quantization.py
 │   └── test_segmentation.py
@@ -50,9 +51,10 @@ tests/
 
 ## Test categories
 
-### Unit tests (8 tests)
+### Unit tests (11 tests)
 
-Fast tests that validate individual backend components without ComfyUI dependencies.
+Fast tests that validate individual backend components without ComfyUI
+dependencies.
 
 | Test | Description |
 |------|-------------|
@@ -64,8 +66,11 @@ Fast tests that validate individual backend components without ComfyUI dependenc
 | `test_quantize_auto_k` | Automatic k selection (elbow method) |
 | `test_build_adjacency_graph` | Region connectivity mapping |
 | `test_segment_pipeline` | Full segmentation data structure |
+| `test_direct_color_segmentation` | Segmentation without watershed |
+| `test_execute_returns_svg_preview` | Node UI payload verification |
+| `test_svg_filename_determinism` | Hash-based filename consistency |
 
-### Integration tests (5 tests)
+### Integration tests (4 tests)
 
 Tests that verify the full processing pipeline and the ComfyUI node class.
 

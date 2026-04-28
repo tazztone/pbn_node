@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -15,6 +16,9 @@ sys.path.insert(0, os.path.dirname(node_dir))
 
 # Mock folder_paths
 mock_folder_paths = MagicMock()
+# Use a real temp directory for mocks so file operations don't fail by default
+
+mock_folder_paths.get_temp_directory.return_value = tempfile.gettempdir()
 if "folder_paths" not in sys.modules:
     sys.modules["folder_paths"] = mock_folder_paths
 
@@ -37,7 +41,9 @@ class MockSchema:
 
 class MockNodeOutput(tuple):
     def __new__(cls, *args, **kwargs):
-        return super().__new__(cls, args)
+        instance = super().__new__(cls, args)
+        instance.ui = kwargs.get("ui")  # type: ignore
+        return instance
 
 
 class MockInputType:
@@ -63,7 +69,9 @@ class MockHidden:
 class MockUI:
     @staticmethod
     def PreviewImage(*args, **kwargs):  # noqa: N802
-        return MagicMock()
+        m = MagicMock()
+        m.values = [{"filename": "test.png", "subfolder": "", "type": "temp"}]
+        return m
 
 
 # Build mock io module

@@ -17,9 +17,10 @@ perception-aware and content-aware system.
 | 3 | **SLIC Superpixels** | 🟡 Medium-high | 🟢 Low | ✅ Done | ★★★★☆ |
 | 4 | **Content-Aware Preprocessing** | 🟢 High (portraits) | 🟡 Moderate | ✅ Done | ★★★★☆ |
 | 5 | **Depth Anything 3** | 🟢 High (landscapes) | 🟠 Moderate-hard | 🟡 Partial | ★★★☆☆ |
-| 6 | **Interactive Palette Controls** | 🟡 UX only | 🟠 Hard (frontend) | 📅 Planned | ★★★☆☆ |
-| 7 | **SAM 3.1** | 🟢 Transformative | 🔴 Hard (arch. change) | 🧪 Research | ★★☆☆☆ |
-| 8 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (model tuning) | 🧪 Research | ★★☆☆☆ |
+| 6 | **SVG Vector Preview** | 🟡 Medium | 🟢 Low | ✅ Done | ★★★★☆ |
+| 7 | **Interactive Palette Controls** | 🟡 UX only | 🟠 Hard (frontend) | 📅 Planned | ★★★☆☆ |
+| 8 | **SAM 3.1** | 🟢 Transformative | 🔴 Hard (arch. change) | 🧪 Research | ★★☆☆☆ |
+| 9 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (model tuning) | 🧪 Research | ★★☆☆☆ |
 
 ---
 
@@ -28,47 +29,68 @@ perception-aware and content-aware system.
 These features have been implemented and are available in the current version.
 
 ### CIEDE2000 color distance
-Replaced Euclidean distance in LAB space with the `skimage.color.deltaE_ciede2000` formula. This provides perceptually correct palette selection, ensuring paint colors map more naturally to human perception.
+Replaced Euclidean distance in LAB space with the `skimage.color.deltaE_ciede2000`
+formula. This provides perceptually correct palette selection, ensuring paint
+colors map more naturally to human perception.
 
 ### Shared border segmentation
-The SVG generator now uses shared borders instead of independent contours for each region. This eliminates the "white-gap" problem and produces perfectly aligned vector paths.
+The SVG generator now uses shared borders instead of independent contours for
+each region. This eliminates the "white-gap" problem and produces perfectly
+aligned vector paths.
 
 ### SLIC superpixels
-Integrated `skimage.segmentation.slic()` into the pipeline to reduce pixel space to compact cells before clustering. This dramatically reduces speckle and isolates the quantizer from noise.
+Integrated `skimage.segmentation.slic()` into the pipeline to reduce pixel space
+to compact cells before clustering. This dramatically reduces speckle and
+isolates the quantizer from noise.
 
 ### Content-aware protection (Face detection)
-Implemented Mediapipe-based face detection to generate protection maps. This ensures high-frequency details in portraits are preserved during color quantization.
+Implemented Mediapipe-based face detection to generate protection maps. This
+ensures high-frequency details in portraits are preserved during color
+quantization.
 
 ### Budget Split (Foreground/Background)
-Implemented a color budget splitting mechanism using Otsu's thresholding to separate foreground and background. This allows allocating a larger portion of the color palette to the subject of the image.
+Implemented a color budget splitting mechanism using Otsu's thresholding to
+separate foreground and background. This allows allocating a larger portion of
+the color palette to the subject of the image.
 
 ### Polylabel placement
-Implemented the Polylabel algorithm for optimal label positioning at the "pole of inaccessibility" (the most distant internal point from the polygon outline).
+Implemented the Polylabel algorithm for optimal label positioning at the "pole
+of inaccessibility" (the most distant internal point from the polygon outline).
+
+### SVG Vector Preview
+Implemented a custom JavaScript extension for the ComfyUI frontend that renders
+the generated SVG as a vector graphic directly in the node body. This provides
+sharp, zoomable previews and supports batch execution through a scrollable DOM
+widget.
 
 ---
 
 ## 🚀 Future Roadmap
 
 ### Depth Anything 3 (DA3)
-Replacing the current Otsu-based budget split with DA3 to produce more accurate foreground/background masks and splitting the color budget proportionally.
+Replacing the current Otsu-based budget split with DA3 to produce more accurate
+foreground/background masks and splitting the color budget proportionally.
 
 - **Status:** Researching integration.
 - **Impact:** Excellent for landscapes and complex depth scenes.
 
 ### Interactive palette controls
-Building ComfyUI V3 widgets to let you manually merge or split colors. This requires deep integration with the ComfyUI frontend API.
+Building ComfyUI V3 widgets to let you manually merge or split colors. This
+requires deep integration with the ComfyUI frontend API.
 
 - **Status:** Long-term goal.
 - **Impact:** Improved user experience and manual control.
 
 ### SAM 3.1 (Segment Anything)
-Replacing the color-first segmentation with SAM's auto-mask generator to produce semantic regions (for example, sky, skin, or objects).
+Replacing the color-first segmentation with SAM's auto-mask generator to produce
+semantic regions (for example, sky, skin, or objects).
 
 - **Status:** Researching.
 - **Impact:** Potentially transformative for complex scenes.
 
 ### Learned edge detection
-Replacing morphological smoothing with models like DexiNed or HED to produce crisper, more artistically natural boundaries.
+Replacing morphological smoothing with models like DexiNed or HED to produce
+crisper, more artistically natural boundaries.
 
 - **Status:** Researching.
 - **Impact:** Cleanest SVG contours possible.

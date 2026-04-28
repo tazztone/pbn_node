@@ -1,6 +1,9 @@
+import hashlib
 import logging
+import os
 
 import cv2
+import folder_paths
 import numpy as np
 import torch
 from comfy_api.latest import ComfyAPISync, io, ui
@@ -221,14 +224,30 @@ class PaintByNumberNode(io.ComfyNode):
         # Stack results back into [B, H, W, 3]
         final_image = torch.stack(result_images, dim=0)
 
-        # In ComfyUI V3, for non-image outputs that are lists, we return the list if the
-        # schema says so.
-        # But here we didn't mark SVG or COLOR_COUNT as list outputs.
-        # For simplicity, if batch > 1, we return the first one or a combined string.
-        # However, usually SVG results for batches should probably be handled carefully.
-        # For now, let's return the first one as per previous behavior but supporting
-        # batch for images.
+        # Save SVGs to temp directory using content hash to prevent accumulation
+        svg_results = []
+        temp_dir = folder_paths.get_temp_directory()
 
-        return io.NodeOutput(
-            final_image, svg_contents[0], color_counts[0], ui=ui.PreviewImage(final_image, cls=cls)
-        )
+        for svg_content in svg_contents:
+            # Use MD5 hash of content for deterministic filenames
+            content_hash = hashlib.md5(svg_content.encode("utf-8")).hexdigest()[:16]
+            svg_filename = f"pbn_{content_hash}.svg"
+            filepath = os.path.join(temp_dir, svg_filename)
+
+            # Note: Non-atomic check is acceptable here as writes are idempotent
+            if not os.path.exists(filepath):
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(svg_content)
+
+            svg_results.append({"filename": svg_filename, "subfolder": "", "type": "temp"})
+
+        # Prepare UI output with both pixel preview and SVG references
+        pixel_preview = ui.PreviewImage(final_image, cls=cls)
+        ui_output = {
+            "images": pixel_preview.values,  # Verified attribute for V3 PreviewImage
+            "pbn_svg": svg_results,
+        }
+
+        # Note: The 'SVG' output pin only returns the first SVG in the batch,
+        # but the UI preview shows all generated vector graphics.
+        return io.NodeOutput(final_image, svg_contents[0], color_counts[0], ui=ui_output)
