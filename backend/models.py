@@ -3,7 +3,7 @@ Data models for the Paint By Number Generator.
 Defines core data structures used throughout the processing pipeline.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -86,8 +86,13 @@ class RegionData:
     """Data about segmented regions."""
 
     regions: dict[int, Polygon]  # Region ID -> Polygon
-    shared_borders: dict[int, list[LineString]]  # Shared border segments
-    adjacency_graph: nx.Graph  # Region adjacency
+    region_colors: dict[int, int] = field(
+        default_factory=dict
+    )  # Region ID -> Color Index (0-based)
+    shared_borders: dict[int, list[LineString]] = field(
+        default_factory=dict
+    )  # Shared border segments
+    adjacency_graph: nx.Graph = field(default_factory=nx.Graph)  # Region adjacency
 
 
 @dataclass

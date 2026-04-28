@@ -223,12 +223,17 @@ class ImageProcessor:
 
             # Optional: Remove speckles
             logger.info("Removing speckles")
-            cleaned_regions = vectorizer.remove_speckles(
-                vectorized_regions, palette.colors, threshold=vectorizer.speckle_threshold
+            cleaned_regions, updated_region_colors = vectorizer.remove_speckles(
+                vectorized_regions,
+                region_data.region_colors,
+                palette.colors,
+                threshold=vectorizer.speckle_threshold,
             )
 
             # Renumber regions to have consecutive IDs (1, 2, 3, ...)
-            cleaned_regions = self._renumber_regions(cleaned_regions)
+            cleaned_regions, renumbered_colors = self._renumber_regions(
+                cleaned_regions, updated_region_colors
+            )
 
             # Stage 6: Label Placement
             logger.info("Stage 5/6: Placing labels")
@@ -251,6 +256,7 @@ class ImageProcessor:
                 cleaned_regions,
                 label_data,
                 palette,
+                region_colors=renumbered_colors,
                 shared_borders=shared_borders,
                 use_shared_borders=params.use_shared_borders,
                 print_mode=(params.output_mode == "print_svg"),
@@ -280,13 +286,17 @@ class ImageProcessor:
             logger.error(f"Image processing failed: {str(e)}")
             raise ValueError(f"Image processing failed: {str(e)}") from e
 
-    def _renumber_regions(self, regions: dict) -> dict:
+    def _renumber_regions(self, regions: dict, region_colors: dict) -> tuple[dict, dict]:
         """
-        Renumber regions to have consecutive IDs starting from 1.
+        Renumber regions to have consecutive IDs starting from 1,
+        preserving their color identity.
         """
-        renumbered = {}
+        renumbered_regions = {}
+        renumbered_colors = {}
         new_id = 1
         for old_id in sorted(regions.keys()):
-            renumbered[new_id] = regions[old_id]
+            renumbered_regions[new_id] = regions[old_id]
+            if old_id in region_colors:
+                renumbered_colors[new_id] = region_colors[old_id]
             new_id += 1
-        return renumbered
+        return renumbered_regions, renumbered_colors

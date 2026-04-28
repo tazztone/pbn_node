@@ -2,7 +2,6 @@
 SVG generation module for creating optimized paint-by-number templates.
 """
 
-
 from shapely.geometry import Polygon
 
 from ..models import ColorPalette, LabelData
@@ -25,6 +24,7 @@ class SVGGenerator:
         regions: dict[int, Polygon],
         labels: LabelData,
         colors: ColorPalette,
+        region_colors: dict[int, int] | None = None,
         shared_borders: dict[int, list] | None = None,
         use_shared_borders: bool = True,
         print_mode: bool = False,
@@ -36,6 +36,7 @@ class SVGGenerator:
             regions: Dictionary of region ID to Polygon
             labels: LabelData with positions and font sizes
             colors: ColorPalette with color information
+            region_colors: Mapping of region ID to color index (0-based)
             shared_borders: Dictionary mapping region IDs to lists of shared LineStrings
             use_shared_borders: Whether to use shared borders for stroke
             print_mode: If True, all fills are white and strokes are black
@@ -65,7 +66,7 @@ class SVGGenerator:
         svg_parts.append("\n")
 
         # Group paths by color
-        grouped_paths = self.group_paths_by_color(regions, colors)
+        grouped_paths = self.group_paths_by_color(regions, colors, region_colors)
 
         # Generate paths for each color group
         for color_hex, region_ids in grouped_paths.items():
@@ -131,9 +132,14 @@ class SVGGenerator:
                 x = position.x
                 y = position.y
 
+                # Use color index + 1 as the label text
+                label_text = str(region_id)
+                if region_colors and region_id in region_colors:
+                    label_text = str(region_colors[region_id] + 1)
+
                 svg_parts.append(f'    <text x="{x:.{self.coordinate_precision}f}" ')
                 svg_parts.append(f'y="{y:.{self.coordinate_precision}f}" ')
-                svg_parts.append(f'font-size="{font_size}">{region_id}</text>\n')
+                svg_parts.append(f'font-size="{font_size}">{label_text}</text>\n')
 
         svg_parts.append("  </g>\n")
 
@@ -143,23 +149,24 @@ class SVGGenerator:
         return "".join(svg_parts)
 
     def group_paths_by_color(
-        self, regions: dict[int, Polygon], colors: ColorPalette
+        self,
+        regions: dict[int, Polygon],
+        colors: ColorPalette,
+        region_colors: dict[int, int] | None = None,
     ) -> dict[str, list[int]]:
         """
         Group regions by color for optimization.
-
-        Args:
-            regions: Dictionary of region ID to Polygon
-            colors: ColorPalette with color information
-
-        Returns:
-            Dictionary mapping hex color to list of region IDs
         """
         grouped: dict[str, list[int]] = {}
 
         for region_id in regions.keys():
-            # Map region ID to color (assuming 1-indexed regions)
-            color_idx = (region_id - 1) % len(colors.hex_colors)
+            # Map region ID to color
+            if region_colors and region_id in region_colors:
+                color_idx = region_colors[region_id]
+            else:
+                # Fallback to sequential modulo if no mapping exists
+                color_idx = (region_id - 1) % len(colors.hex_colors)
+
             color_hex = colors.hex_colors[color_idx]
 
             if color_hex not in grouped:

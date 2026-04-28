@@ -15,9 +15,10 @@ dependencies like `torch` and `shapely` are available.
 > `pytest` directly from your shell.
 
 ```bash
+# Execute from the pbn_node directory
 cd custom_nodes/pbn_node
 
-# Run all tests using the ComfyUI venv
+# Run all tests using the ComfyUI venv (relative to pbn_node)
 ../../venv/bin/python tests/run_tests.py
 
 # Run with verbose output

@@ -157,8 +157,12 @@ class Vectorizer:
             return np.array(simplified_points)
 
     def remove_speckles(
-        self, regions: dict[int, Polygon], colors: np.ndarray, threshold: float = 0.001
-    ) -> dict[int, Polygon]:
+        self,
+        regions: dict[int, Polygon],
+        region_colors: dict[int, int],
+        colors: np.ndarray,
+        threshold: float = 0.001,
+    ) -> tuple[dict[int, Polygon], dict[int, int]]:
         """
         Remove speckle regions smaller than threshold.
 
@@ -166,11 +170,12 @@ class Vectorizer:
 
         Args:
             regions: Dictionary of region ID to Polygon
+            region_colors: Mapping of region ID to color index
             colors: Color centers in LAB space
             threshold: Area threshold as fraction of total area (default 0.1%)
 
         Returns:
-            Dictionary with speckles removed
+            Tuple of (cleaned_regions, updated_region_colors)
         """
         # Calculate total area
         total_area = self.calculate_total_area(regions)
@@ -188,24 +193,26 @@ class Vectorizer:
 
         # If no large regions, keep everything
         if not large_regions:
-            return regions
+            return regions, region_colors
 
         # Merge each speckle into nearest neighbor by color distance
         for speckle_id, speckle_polygon in speckles:
-            if speckle_id >= len(colors):
+            if speckle_id not in region_colors:
                 continue
 
-            speckle_color = colors[speckle_id - 1]  # Assuming 1-indexed regions
+            speckle_color_idx = region_colors[speckle_id]
+            speckle_color = colors[speckle_color_idx]
 
             # Find nearest neighbor by LAB color distance
             min_distance = float("inf")
             nearest_id = None
 
             for region_id in large_regions.keys():
-                if region_id >= len(colors):
+                if region_id not in region_colors:
                     continue
 
-                region_color = colors[region_id - 1]
+                region_color_idx = region_colors[region_id]
+                region_color = colors[region_color_idx]
                 distance = float(np.linalg.norm(speckle_color - region_color))
 
                 if distance < min_distance:
@@ -230,7 +237,11 @@ class Vectorizer:
                     # If merge fails, just skip this speckle
                     pass
 
-        return large_regions
+            # Remove speckle from region_colors
+            if speckle_id in region_colors:
+                del region_colors[speckle_id]
+
+        return large_regions, region_colors
 
     def calculate_total_area(self, regions: dict[int, Polygon]) -> float:
         """

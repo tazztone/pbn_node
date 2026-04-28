@@ -2,7 +2,6 @@
 Color quantization module implementing K-means clustering in LAB color space.
 """
 
-
 import cv2
 import numpy as np
 from kneed import KneeLocator
@@ -26,7 +25,7 @@ class ColorQuantizer:
         """Initialize quantizer with default parameters."""
         self.min_k = 2
         self.max_k = 40
-        self.k_cap = 30
+        self.k_cap = 20
         self.max_iterations = 100
         self.monochrome_variance_threshold = 0.05  # 5%
         self.monochrome_k = 3
@@ -175,23 +174,17 @@ class ColorQuantizer:
         self, image: np.ndarray, num_colors: int | None = None
     ) -> tuple[np.ndarray, ColorPalette]:
         """
-        Complete quantization pipeline.
-
-        Args:
-            image: Input image (BGR format)
-            num_colors: Number of colors (None for auto-detection)
-
-        Returns:
-            Tuple of (quantized_image, color_palette)
+        Complete quantization pipeline with pairwise merge and budget enforcement.
         """
         # Determine k
         if num_colors is None:
             k = self.auto_select_k(image)
         else:
-            # Enforce constraints on manual k
-            k = max(self.min_k, min(num_colors, self.k_cap))
+            k = max(
+                self.min_k, num_colors
+            )  # Allow manual k to exceed k_cap if explicitly requested
 
-        # Perform quantization
+        # Perform initial quantization
         quantized_image, centers_lab = self.kmeans_lab(image, k)
 
         # Post-KMeans perceptual palette merge
@@ -200,41 +193,46 @@ class ColorQuantizer:
 
             from ..utils.color import cv_to_std_lab
 
-            std_centers = cv_to_std_lab(centers_lab)
+            # We use pairwise merging: find closest pair, merge, repeat.
+            # This is more robust than sequential merging.
 
-            merged_centers = []
-            used = set()
+            # Target k: if num_colors was provided, we MUST hit it.
+            # If auto-selected, we use ciede2000_merge_thresh.
+            target_k = num_colors if num_colors is not None else 0
+            current_thresh = self.ciede2000_merge_thresh
 
-            for i in range(len(std_centers)):
-                if i in used:
-                    continue
+            while True:
+                std_centers = cv_to_std_lab(centers_lab)
+                n = len(std_centers)
+                if n <= 1 or (target_k > 0 and n <= target_k):
+                    break
 
-                cluster_group = [i]
-                used.add(i)
-                current_group_mean = std_centers[i].copy()
+                # Compute all-pairs distances
+                best_dist = float("inf")
+                best_pair = (-1, -1)
 
-                for j in range(i + 1, len(std_centers)):
-                    if j in used:
-                        continue
+                for i in range(n):
+                    for j in range(i + 1, n):
+                        dist = skimage.color.deltaE_ciede2000(
+                            std_centers[i][np.newaxis, :], std_centers[j][np.newaxis, :]
+                        )[0]
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_pair = (i, j)
 
-                    # Compute CIEDE2000 distance against current group mean
-                    dist = skimage.color.deltaE_ciede2000(
-                        current_group_mean[np.newaxis, :], std_centers[[j]]
-                    )[0]
+                # If we have a target_k, we merge regardless of threshold until we hit it.
+                # If no target_k, we only merge if best_dist < threshold.
+                if target_k == 0 and best_dist > current_thresh:
+                    break
 
-                    if dist < self.ciede2000_merge_thresh:
-                        cluster_group.append(j)
-                        used.add(j)
-                        # Update group mean
-                        # We can average the std_centers directly for the running mean comparison
-                        current_group_mean = np.mean(std_centers[cluster_group], axis=0)
+                # Merge best_pair
+                i, j = best_pair
+                new_center = np.mean(centers_lab[[i, j]], axis=0)
 
-                # Average the merged LAB colors in standard LAB, then convert back?
-                # Actually, averaging in CV2 LAB is fine since it's a linear mapping.
-                merged_lab = np.mean(centers_lab[cluster_group], axis=0)
-                merged_centers.append(merged_lab)
-
-            centers_lab = np.array(merged_centers, dtype=np.float32)
+                # Remove i and j, add new_center
+                mask = np.ones(n, dtype=bool)
+                mask[[i, j]] = False
+                centers_lab = np.vstack([centers_lab[mask], new_center[np.newaxis, :]])
 
             # Re-quantize the image with the merged centers
             lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -243,25 +241,19 @@ class ColorQuantizer:
 
             if self.use_ciede2000:
                 std_pixels = cv_to_std_lab(pixels)
-                # centers_lab is now `merged_centers`, we need to convert to std lab
                 std_colors = cv_to_std_lab(centers_lab)
-
                 k_total = centers_lab.shape[0]
                 dists = np.zeros((pixels.shape[0], k_total), dtype=np.float32)
-
                 for ki in range(k_total):
                     dists[:, ki] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[ki]])
             else:
-                # Assign pixels to the closest new merged center using standard euclidean distance
                 diffs = pixels[:, np.newaxis, :] - centers_lab[np.newaxis, :, :]
                 dists = np.sum(diffs**2, axis=2)
 
             labels = np.argmin(dists, axis=1)
-
             quantized_pixels = centers_lab[labels]
             quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
             quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
-
             merged_k = len(centers_lab)
 
         # Convert LAB centers to RGB for hex representation

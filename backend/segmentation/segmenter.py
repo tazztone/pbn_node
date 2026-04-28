@@ -2,6 +2,7 @@
 Region segmentation module implementing watershed transform and shared border segmentation.
 """
 
+from collections import deque
 from typing import cast
 
 import cv2
@@ -62,7 +63,9 @@ class RegionSegmenter:
 
         return markers_copy.astype(np.int32)
 
-    def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> np.ndarray:
+    def direct_color_segmentation(
+        self, quantized: np.ndarray, colors: np.ndarray
+    ) -> tuple[np.ndarray, dict[int, int]]:
         """
         Direct color-based segmentation following pbnify's approach.
         """
@@ -79,9 +82,9 @@ class RegionSegmenter:
             smoothed = self._thin_region_cleanup(smoothed, self.min_region_width)
 
         # Step 3: Apply pbnify's getLabelLocs function (flood-fill + region filtering)
-        regions_matrix = self._get_regions_pbnify(smoothed)
+        regions_matrix, region_colors = self._get_regions_pbnify(smoothed)
 
-        return regions_matrix
+        return regions_matrix, region_colors
 
     def _thin_region_cleanup(self, mat: np.ndarray, min_width: int) -> np.ndarray:
         """
@@ -216,7 +219,7 @@ class RegionSegmenter:
         idx = np.argmax(counts, axis=0)
         return unique_ids[idx]
 
-    def _get_regions_pbnify(self, mat: np.ndarray) -> np.ndarray:
+    def _get_regions_pbnify(self, mat: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
         """
         Exact implementation of pbnify's getLabelLocs logic.
         Finds connected regions and removes small ones or regions with severe convexity deficits.
@@ -224,12 +227,17 @@ class RegionSegmenter:
         h, w = mat.shape
         covered = np.zeros((h, w), dtype=bool)
         regions_matrix = np.zeros((h, w), dtype=np.int32)
+        region_colors = {}
         next_region_id = 1
         min_region_size = 100  # pbnify's threshold
 
         for y in range(h):
             for x in range(w):
                 if not covered[y, x]:
+                    # Capture original color index (0-based) from mat
+                    # mat contains 1-indexed color IDs from _create_color_id_matrix
+                    color_idx = int(mat[y, x]) - 1
+
                     # Get connected region
                     region = self._get_region_pbnify(mat, covered, x, y, w, h)
 
@@ -252,37 +260,35 @@ class RegionSegmenter:
                         for i in range(len(region["x"])):
                             px, py = region["x"][i], region["y"][i]
                             regions_matrix[py, px] = next_region_id
+
+                        region_colors[next_region_id] = color_idx
                         next_region_id += 1
                     else:
                         # Remove small or convoluted region (merge with neighbor)
                         self._remove_region_pbnify(mat, region)
 
-        return regions_matrix
+        return regions_matrix, region_colors
 
     def _get_region_pbnify(
         self, mat: np.ndarray, covered: np.ndarray, x: int, y: int, width: int, height: int
     ) -> dict:
         """
-        Exact implementation of pbnify's getRegion function.
-        Uses queue-based flood fill.
+        Implementation of pbnify's getRegion function.
+        Uses deque-based flood fill for O(1) pops.
         """
-        # Create a copy of covered for this region
-        region_covered = covered.copy()
-
         region = {"value": mat[y, x], "x": [], "y": []}
         value = mat[y, x]
 
-        # Queue-based flood fill (exactly like pbnify)
-        queue = [[x, y]]
+        # Queue-based flood fill
+        queue = deque([[x, y]])
 
         while queue:
-            coord = queue.pop(0)  # FIFO
+            coord = queue.popleft()  # O(1)
             cx, cy = coord[0], coord[1]
 
-            if not region_covered[cy, cx] and mat[cy, cx] == value:
+            if not covered[cy, cx] and mat[cy, cx] == value:
                 region["x"].append(cx)
                 region["y"].append(cy)
-                region_covered[cy, cx] = True
                 covered[cy, cx] = True  # Update the main covered array
 
                 # Add 4-connected neighbors
@@ -329,62 +335,38 @@ class RegionSegmenter:
 
     def build_adjacency_graph(self, regions: np.ndarray) -> nx.Graph:
         """
-        Build adjacency graph of regions.
-
-        Args:
-            regions: Labeled region image
-
-        Returns:
-            NetworkX graph where nodes are region IDs and edges connect adjacent regions
+        Build adjacency graph of regions using vectorized shifts.
         """
         graph = nx.Graph()
-
-        # Get unique region IDs (excluding background 0)
         region_ids = np.unique(regions)
         region_ids = region_ids[region_ids > 0]
-
-        # Add all regions as nodes
         for region_id in region_ids:
             graph.add_node(int(region_id))
 
-        # Find adjacent regions by checking 4-connectivity
-        h, w = regions.shape
+        # Horizontal adjacency
+        h_adj = (regions[:, :-1] != regions[:, 1:]) & (regions[:, :-1] > 0) & (regions[:, 1:] > 0)
+        if np.any(h_adj):
+            pairs = np.column_stack((regions[:, :-1][h_adj], regions[:, 1:][h_adj]))
+            # Unique pairs to reduce graph add_edge calls
+            unique_pairs = np.unique(np.sort(pairs, axis=1), axis=0)
+            for u, v in unique_pairs:
+                graph.add_edge(int(u), int(v))
 
-        # Check horizontal adjacency
-        for y in range(h):
-            for x in range(w - 1):
-                left = regions[y, x]
-                right = regions[y, x + 1]
-                if left > 0 and right > 0 and left != right:
-                    graph.add_edge(int(left), int(right))
-
-        # Check vertical adjacency
-        for y in range(h - 1):
-            for x in range(w):
-                top = regions[y, x]
-                bottom = regions[y + 1, x]
-                if top > 0 and bottom > 0 and top != bottom:
-                    graph.add_edge(int(top), int(bottom))
+        # Vertical adjacency
+        v_adj = (regions[:-1, :] != regions[1:, :]) & (regions[:-1, :] > 0) & (regions[1:, :] > 0)
+        if np.any(v_adj):
+            pairs = np.column_stack((regions[:-1, :][v_adj], regions[1:, :][v_adj]))
+            unique_pairs = np.unique(np.sort(pairs, axis=1), axis=0)
+            for u, v in unique_pairs:
+                graph.add_edge(int(u), int(v))
 
         return graph
 
     def shared_border_segmentation(self, regions: np.ndarray) -> dict[int, list[LineString]]:
         """
-        Implement Shared Border Segmentation algorithm.
-
-        This is the key innovation: assigns border pixels to shared edges between
-        neighboring regions, eliminating gaps.
-
-        Args:
-            regions: Labeled region image
-
-        Returns:
-            Dictionary mapping region IDs to lists of LineString border segments
+        Implement Shared Border Segmentation algorithm using vectorized shifts.
         """
         shared_borders: dict[int, list[LineString]] = {}
-        h, w = regions.shape
-
-        # Initialize border storage for each region
         region_ids = np.unique(regions)
         region_ids = region_ids[region_ids > 0]
         for region_id in region_ids:
@@ -394,42 +376,35 @@ class RegionSegmenter:
         border_segments: dict[tuple[int, int], list[tuple[float, float]]] = {}
 
         # Scan horizontally for borders
-        for y in range(h):
-            for x in range(w - 1):
-                left = regions[y, x]
-                right = regions[y, x + 1]
+        h_adj = (regions[:, :-1] != regions[:, 1:]) & (regions[:, :-1] > 0) & (regions[:, 1:] > 0)
+        if np.any(h_adj):
+            y_coords, x_coords = np.where(h_adj)
+            left_ids = regions[:, :-1][h_adj]
+            right_ids = regions[:, 1:][h_adj]
 
-                if left > 0 and right > 0 and left != right:
-                    # Found a border between two regions
-                    pair = cast(tuple[int, int], tuple(sorted([int(left), int(right)])))
-                    if pair not in border_segments:
-                        border_segments[pair] = []
-                    # Store the border point (between pixels)
-                    border_segments[pair].append((x + 0.5, y))
+            for i in range(len(y_coords)):
+                pair = cast(tuple[int, int], tuple(sorted([int(left_ids[i]), int(right_ids[i])])))
+                if pair not in border_segments:
+                    border_segments[pair] = []
+                border_segments[pair].append((float(x_coords[i] + 0.5), float(y_coords[i])))
 
         # Scan vertically for borders
-        for y in range(h - 1):
-            for x in range(w):
-                top = regions[y, x]
-                bottom = regions[y + 1, x]
+        v_adj = (regions[:-1, :] != regions[1:, :]) & (regions[:-1, :] > 0) & (regions[1:, :] > 0)
+        if np.any(v_adj):
+            y_coords, x_coords = np.where(v_adj)
+            top_ids = regions[:-1, :][v_adj]
+            bottom_ids = regions[1:, :][v_adj]
 
-                if top > 0 and bottom > 0 and top != bottom:
-                    # Found a border between two regions
-                    pair = cast(tuple[int, int], tuple(sorted([int(top), int(bottom)])))
-                    if pair not in border_segments:
-                        border_segments[pair] = []
-                    # Store the border point (between pixels)
-                    border_segments[pair].append((x, y + 0.5))
+            for i in range(len(y_coords)):
+                pair = cast(tuple[int, int], tuple(sorted([int(top_ids[i]), int(bottom_ids[i])])))
+                if pair not in border_segments:
+                    border_segments[pair] = []
+                border_segments[pair].append((float(x_coords[i]), float(y_coords[i] + 0.5)))
 
         # Convert border points to LineStrings
         for (region1, region2), points in border_segments.items():
             if len(points) >= 2:
-                # Sort points to create connected line segments
-                # For now, create a simple LineString from all points
-                # In production, you'd want to trace connected segments
                 line = LineString(points)
-
-                # Assign this shared border to both regions
                 shared_borders[region1].append(line)
                 shared_borders[region2].append(line)
 
@@ -451,11 +426,13 @@ class RegionSegmenter:
         # Direct (use_watershed=False): Faster alternative using direct pixel assignment
 
         if self.use_watershed:
-            # Original watershed implementation - matches spec but slower
+            # Original watershed implementation
             h, w = quantized.shape[:2]
             markers = np.zeros((h, w), dtype=np.int32)
+            region_colors = {}
+            next_marker_id = 1
 
-            # Get unique colors in the quantized image and map them to marker IDs
+            # Get unique colors in the quantized image
             quantized_2d = quantized.reshape(-1, 3)
             unique_colors_bgr = np.unique(quantized_2d, axis=0)
 
@@ -464,24 +441,28 @@ class RegionSegmenter:
                 unique_colors_bgr.reshape(1, -1, 3), cv2.COLOR_BGR2LAB
             ).reshape(-1, 3)
 
-            # For each cluster center, find the closest quantized color and create markers
+            # For each cluster center, find the closest quantized color
             for i, center_lab in enumerate(colors):
-                # Find the closest quantized color to this cluster center
                 distances = np.sum((unique_colors_lab - center_lab) ** 2, axis=1)
                 closest_idx = np.argmin(distances)
                 closest_color_bgr = unique_colors_bgr[closest_idx]
 
                 # Create mask for pixels of this color
-                color_mask = np.all(quantized == closest_color_bgr, axis=2)
+                color_mask = np.all(quantized == closest_color_bgr, axis=2).astype(np.uint8)
 
-                # Set marker ID (i+1 because watershed uses 0 for unknown regions)
-                markers[color_mask] = i + 1
+                # Find connected components for this color to give each island a unique marker
+                num_labels, labels_im = cv2.connectedComponents(color_mask)
+
+                for label in range(1, num_labels):
+                    markers[labels_im == label] = next_marker_id
+                    region_colors[next_marker_id] = i
+                    next_marker_id += 1
 
             # Apply watershed transform
             segmented = self.watershed_transform(quantized, markers)
         else:
             # Direct color segmentation - faster alternative
-            segmented = self.direct_color_segmentation(quantized, colors)
+            segmented, region_colors = self.direct_color_segmentation(quantized, colors)
 
         # Build adjacency graph
         adjacency_graph = self.build_adjacency_graph(segmented)
@@ -570,5 +551,8 @@ class RegionSegmenter:
                                 pass
 
         return RegionData(
-            regions=regions, shared_borders=shared_borders, adjacency_graph=adjacency_graph
+            regions=regions,
+            region_colors=region_colors if "region_colors" in locals() else {},
+            shared_borders=shared_borders,
+            adjacency_graph=adjacency_graph,
         )

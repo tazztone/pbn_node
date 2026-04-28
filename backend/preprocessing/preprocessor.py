@@ -2,7 +2,6 @@
 Image preprocessing module implementing bilateral filtering and histogram equalization.
 """
 
-
 import cv2
 import numpy as np
 

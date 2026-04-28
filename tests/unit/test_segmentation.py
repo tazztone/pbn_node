@@ -29,12 +29,13 @@ def quantized_mock():
 def test_direct_color_segmentation(quantized_mock):
     img, colors = quantized_mock
     segmenter = RegionSegmenter(use_watershed=False)
-    segmented = segmenter.direct_color_segmentation(img, colors)
+    segmented, region_colors = segmenter.direct_color_segmentation(img, colors)
 
     assert segmented.shape == (100, 100)
+    assert isinstance(region_colors, dict)
     # Since it's a simple image, it should find at least 3 regions
-    # (actually more due to smoothing if we are not careful, but let's just check it runs)
     assert np.max(segmented) >= 1
+    assert len(region_colors) == np.max(segmented)
 
 
 @pytest.mark.unit

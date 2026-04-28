@@ -43,6 +43,10 @@ module = [
     "sklearn.*",
     "networkx.*",
     "kneed.*",
-    "comfy_api.*"
+    "comfy_api.*",
+    "mediapipe.*",
+    "bezier.*",
+    "skimage.*",
+    "pytest.*"
 ]
 ignore_missing_imports = true
