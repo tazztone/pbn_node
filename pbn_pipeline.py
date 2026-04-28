@@ -72,12 +72,14 @@ class ImageProcessor:
                     rgb_image, n_segments=500, compactness=10, start_label=1
                 )
 
-                # replace each pixel with its superpixel mean color
-                superpixel_img = np.zeros_like(preprocessed)
-                for seg_val in np.unique(segments):
-                    mask = segments == seg_val
-                    mean_color = preprocessed[mask].mean(axis=0)
-                    superpixel_img[mask] = mean_color
+                # replace each pixel with its superpixel mean color using vectorized approach
+                superpixel_img = skimage.color.label2rgb(
+                    segments, preprocessed, kind="avg", bg_label=-1
+                )
+                # label2rgb returns float64 [0,1] or [0,255] depending on input, 
+                # but with kind='avg' and uint8 input it should be consistent.
+                # To be safe, ensure uint8.
+                superpixel_img = (superpixel_img).astype(np.uint8)
 
                 input_for_quantization = superpixel_img
             else:

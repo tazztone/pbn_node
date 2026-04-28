@@ -99,6 +99,24 @@ Run it with this command:
 uvx mypy .
 ```
 
+### Pre-commit hooks
+
+We use `pre-commit` to automatically run linting, formatting, and type checking
+before each commit. To set up the hooks, install `pre-commit` and run the
+installation command:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Once installed, the hooks will run automatically on every commit. You can also
+run them manually on all files at any time:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Next steps
 
 Once you've installed the node, there are several ways to extend your workflow.

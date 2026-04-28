@@ -13,6 +13,12 @@ from shapely.ops import unary_union
 
 from ..models import RegionData
 
+try:
+    import bezier
+    _HAS_BEZIER = True
+except ImportError:
+    _HAS_BEZIER = False
+
 
 class Vectorizer:
     """
@@ -293,7 +299,8 @@ class Vectorizer:
         """
         Fits cubic Bézier curves to the given coordinates to smooth out sharp edges.
         """
-        import bezier
+        if not _HAS_BEZIER:
+            return coords
 
         # Flatten array if needed
         if len(coords.shape) == 3:

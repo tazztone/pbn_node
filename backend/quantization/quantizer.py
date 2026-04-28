@@ -250,8 +250,8 @@ class ColorQuantizer:
                 K = centers_lab.shape[0]
                 dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
 
-                for k in range(K):
-                    dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+                for ki in range(K):
+                    dists[:, ki] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[ki]])
             else:
                 # Assign pixels to the closest new merged center using standard euclidean distance
                 diffs = pixels[:, np.newaxis, :] - centers_lab[np.newaxis, :, :]
@@ -263,7 +263,7 @@ class ColorQuantizer:
             quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
             quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
 
-            k = len(centers_lab)
+            merged_k = len(centers_lab)
 
         # Convert LAB centers to RGB for hex representation
         centers_lab_uint8 = centers_lab.astype(np.uint8).reshape(1, -1, 3)
@@ -276,6 +276,6 @@ class ColorQuantizer:
             hex_color = "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
             hex_colors.append(hex_color)
 
-        palette = ColorPalette(colors=centers_lab, hex_colors=hex_colors, color_count=k)
+        palette = ColorPalette(colors=centers_lab, hex_colors=hex_colors, color_count=merged_k if 'merged_k' in locals() else k)
 
         return quantized_image, palette
