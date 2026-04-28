@@ -2,7 +2,6 @@
 Image preprocessing module implementing bilateral filtering and histogram equalization.
 """
 
-from typing import Tuple
 
 import cv2
 import numpy as np
@@ -83,7 +82,7 @@ class Preprocessor:
         height, width = image.shape[:2]
         return "portrait" if height > width else "landscape"
 
-    def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, ImageMetadata]:
+    def preprocess(self, image: np.ndarray) -> tuple[np.ndarray, ImageMetadata]:
         """
         Complete preprocessing pipeline.
 

@@ -2,7 +2,6 @@
 SVG generation module for creating optimized paint-by-number templates.
 """
 
-from typing import Dict, List, Optional, Tuple
 
 from shapely.geometry import Polygon
 
@@ -23,10 +22,10 @@ class SVGGenerator:
 
     def generate_svg(
         self,
-        regions: Dict[int, Polygon],
+        regions: dict[int, Polygon],
         labels: LabelData,
         colors: ColorPalette,
-        shared_borders: Optional[Dict[int, List]] = None,
+        shared_borders: dict[int, list] | None = None,
         use_shared_borders: bool = True,
         print_mode: bool = False,
     ) -> str:
@@ -144,8 +143,8 @@ class SVGGenerator:
         return "".join(svg_parts)
 
     def group_paths_by_color(
-        self, regions: Dict[int, Polygon], colors: ColorPalette
-    ) -> Dict[str, List[int]]:
+        self, regions: dict[int, Polygon], colors: ColorPalette
+    ) -> dict[str, list[int]]:
         """
         Group regions by color for optimization.
 
@@ -156,7 +155,7 @@ class SVGGenerator:
         Returns:
             Dictionary mapping hex color to list of region IDs
         """
-        grouped: Dict[str, List[int]] = {}
+        grouped: dict[str, list[int]] = {}
 
         for region_id in regions.keys():
             # Map region ID to color (assuming 1-indexed regions)
@@ -189,7 +188,7 @@ class SVGGenerator:
 
         return "".join(comment_parts)
 
-    def calculate_viewbox(self, regions: Dict[int, Polygon]) -> Tuple[float, float, float, float]:
+    def calculate_viewbox(self, regions: dict[int, Polygon]) -> tuple[float, float, float, float]:
         """
         Calculate tight bounding box for viewBox.
 

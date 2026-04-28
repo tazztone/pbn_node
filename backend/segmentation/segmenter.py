@@ -2,7 +2,7 @@
 Region segmentation module implementing watershed transform and shared border segmentation.
 """
 
-from typing import Dict, List, Tuple, cast
+from typing import cast
 
 import cv2
 import networkx as nx
@@ -103,7 +103,7 @@ class RegionSegmenter:
                     start = x
             runs.append((start, w - 1, row[start]))
 
-            for start, end, val in runs:
+            for start, end, _ in runs:
                 width = end - start + 1
                 if width < min_width:
                     # Find dominant neighbor
@@ -133,7 +133,7 @@ class RegionSegmenter:
                     start = y
             runs.append((start, h - 1, col[start]))
 
-            for start, end, val in runs:
+            for start, end, _ in runs:
                 width = end - start + 1
                 if width < min_width:
                     # Find dominant neighbor
@@ -173,10 +173,10 @@ class RegionSegmenter:
             std_colors = cv_to_std_lab(colors)
 
             # (H*W, 3) and (K, 3) -> we need dists (H*W, K)
-            K = colors.shape[0]
-            dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+            k_total = colors.shape[0]
+            dists = np.zeros((pixels.shape[0], k_total), dtype=np.float32)
 
-            for k in range(K):
+            for k in range(k_total):
                 # ciede2000 takes (..., 3) arrays
                 # Ensure the color array has at least 2 dimensions for correct broadcasting
                 dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
@@ -368,7 +368,7 @@ class RegionSegmenter:
 
         return graph
 
-    def shared_border_segmentation(self, regions: np.ndarray) -> Dict[int, List[LineString]]:
+    def shared_border_segmentation(self, regions: np.ndarray) -> dict[int, list[LineString]]:
         """
         Implement Shared Border Segmentation algorithm.
 
@@ -381,7 +381,7 @@ class RegionSegmenter:
         Returns:
             Dictionary mapping region IDs to lists of LineString border segments
         """
-        shared_borders: Dict[int, List[LineString]] = {}
+        shared_borders: dict[int, list[LineString]] = {}
         h, w = regions.shape
 
         # Initialize border storage for each region
@@ -391,7 +391,7 @@ class RegionSegmenter:
             shared_borders[int(region_id)] = []
 
         # (region1, region2) -> points
-        border_segments: Dict[Tuple[int, int], List[Tuple[float, float]]] = {}
+        border_segments: dict[tuple[int, int], list[tuple[float, float]]] = {}
 
         # Scan horizontally for borders
         for y in range(h):
@@ -401,7 +401,7 @@ class RegionSegmenter:
 
                 if left > 0 and right > 0 and left != right:
                     # Found a border between two regions
-                    pair = cast(Tuple[int, int], tuple(sorted([int(left), int(right)])))
+                    pair = cast(tuple[int, int], tuple(sorted([int(left), int(right)])))
                     if pair not in border_segments:
                         border_segments[pair] = []
                     # Store the border point (between pixels)
@@ -415,7 +415,7 @@ class RegionSegmenter:
 
                 if top > 0 and bottom > 0 and top != bottom:
                     # Found a border between two regions
-                    pair = cast(Tuple[int, int], tuple(sorted([int(top), int(bottom)])))
+                    pair = cast(tuple[int, int], tuple(sorted([int(top), int(bottom)])))
                     if pair not in border_segments:
                         border_segments[pair] = []
                     # Store the border point (between pixels)

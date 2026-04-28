@@ -42,19 +42,19 @@ class MockNodeOutput(tuple):
 
 class MockInputType:
     @staticmethod
-    def Input(name, *args, **kwargs):
+    def Input(name, *args, **kwargs):  # noqa: N802
         m = MagicMock(name=name)
         m.name = name
         return m
 
     @staticmethod
-    def Output(**kwargs):
+    def Output(**kwargs):  # noqa: N802
         return MagicMock()
 
 
 class MockHidden:
     @staticmethod
-    def Input(name, *args, **kwargs):
+    def Input(name, *args, **kwargs):  # noqa: N802
         m = MagicMock(name=name)
         m.name = name
         return m
@@ -62,7 +62,7 @@ class MockHidden:
 
 class MockUI:
     @staticmethod
-    def PreviewImage(*args, **kwargs):
+    def PreviewImage(*args, **kwargs):  # noqa: N802
         return MagicMock()
 
 

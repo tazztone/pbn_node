@@ -4,7 +4,7 @@ and speckle removal.
 """
 
 import heapq
-from typing import Dict, List, cast
+from typing import cast
 
 import cv2
 import numpy as np
@@ -36,7 +36,7 @@ class Vectorizer:
         self.speckle_threshold = 0.001  # 0.1% of total area
         self.use_bezier_smooth = use_bezier_smooth
 
-    def find_contours(self, region_mask: np.ndarray) -> List[np.ndarray]:
+    def find_contours(self, region_mask: np.ndarray) -> list[np.ndarray]:
         """
         Find contours using OpenCV.
 
@@ -47,7 +47,7 @@ class Vectorizer:
             List of contours as numpy arrays
         """
         contours, _ = cv2.findContours(region_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return cast(List[np.ndarray], contours)
+        return cast(list[np.ndarray], contours)
 
     def visvalingam_whyatt(self, contour: np.ndarray, tolerance: float) -> np.ndarray:
         """
@@ -157,8 +157,8 @@ class Vectorizer:
             return np.array(simplified_points)
 
     def remove_speckles(
-        self, regions: Dict[int, Polygon], colors: np.ndarray, threshold: float = 0.001
-    ) -> Dict[int, Polygon]:
+        self, regions: dict[int, Polygon], colors: np.ndarray, threshold: float = 0.001
+    ) -> dict[int, Polygon]:
         """
         Remove speckle regions smaller than threshold.
 
@@ -232,7 +232,7 @@ class Vectorizer:
 
         return large_regions
 
-    def calculate_total_area(self, regions: Dict[int, Polygon]) -> float:
+    def calculate_total_area(self, regions: dict[int, Polygon]) -> float:
         """
         Calculate total area of all regions.
 
@@ -244,7 +244,7 @@ class Vectorizer:
         """
         return cast(float, sum(polygon.area for polygon in regions.values()))
 
-    def vectorize(self, region_data: RegionData, simplification: float) -> Dict[int, Polygon]:
+    def vectorize(self, region_data: RegionData, simplification: float) -> dict[int, Polygon]:
         """
         Complete vectorization pipeline.
 

@@ -169,10 +169,10 @@ class ImageProcessor:
                         std_pixels = cv_to_std_lab(pixels)
                         std_colors = cv_to_std_lab(merged_colors_lab)
 
-                        K = merged_colors_lab.shape[0]
-                        dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+                        k_total = merged_colors_lab.shape[0]
+                        dists = np.zeros((pixels.shape[0], k_total), dtype=np.float32)
 
-                        for ki in range(K):
+                        for ki in range(k_total):
                             dists[:, ki] = skimage.color.deltaE_ciede2000(
                                 std_pixels, std_colors[[ki]]
                             )
@@ -278,7 +278,7 @@ class ImageProcessor:
 
         except Exception as e:
             logger.error(f"Image processing failed: {str(e)}")
-            raise ValueError(f"Image processing failed: {str(e)}")
+            raise ValueError(f"Image processing failed: {str(e)}") from e
 
     def _renumber_regions(self, regions: dict) -> dict:
         """

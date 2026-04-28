@@ -5,7 +5,7 @@ Defines core data structures used throughout the processing pipeline.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Literal, Optional, Set
+from typing import Literal
 
 import networkx as nx
 import numpy as np
@@ -19,9 +19,9 @@ class ProcessingJob:
     job_id: str
     status: str  # "processing" | "complete" | "failed"
     input_path: str
-    output_svg: Optional[str] = None
-    error_message: Optional[str] = None
-    created_at: Optional[datetime] = None
+    output_svg: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
 
     def __post_init__(self):
         if self.created_at is None:
@@ -32,7 +32,7 @@ class ProcessingJob:
 class ProcessingParameters:
     """Parameters for image processing."""
 
-    num_colors: Optional[int] = None  # None for auto-detection
+    num_colors: int | None = None  # None for auto-detection
     simplification: float = 1.0  # 0.5-2.0 pixel tolerance
     use_watershed: bool = False  # Whether to use watershed segmentation (slower but original spec)
 
@@ -77,7 +77,7 @@ class ColorPalette:
     """Color palette information."""
 
     colors: np.ndarray  # LAB color values
-    hex_colors: List[str]  # Hex representation for SVG
+    hex_colors: list[str]  # Hex representation for SVG
     color_count: int
 
 
@@ -85,8 +85,8 @@ class ColorPalette:
 class RegionData:
     """Data about segmented regions."""
 
-    regions: Dict[int, Polygon]  # Region ID -> Polygon
-    shared_borders: Dict[int, List[LineString]]  # Shared border segments
+    regions: dict[int, Polygon]  # Region ID -> Polygon
+    shared_borders: dict[int, list[LineString]]  # Shared border segments
     adjacency_graph: nx.Graph  # Region adjacency
 
 
@@ -94,9 +94,9 @@ class RegionData:
 class LabelData:
     """Data about label placement."""
 
-    positions: Dict[int, Point]  # Region ID -> Label position
-    font_sizes: Dict[int, int]  # Region ID -> Font size
-    skipped_regions: Set[int]  # Regions too small for labels
+    positions: dict[int, Point]  # Region ID -> Label position
+    font_sizes: dict[int, int]  # Region ID -> Font size
+    skipped_regions: set[int]  # Regions too small for labels
 
 
 @dataclass

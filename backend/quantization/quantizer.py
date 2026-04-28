@@ -2,7 +2,6 @@
 Color quantization module implementing K-means clustering in LAB color space.
 """
 
-from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -34,9 +33,9 @@ class ColorQuantizer:
         self.use_palette_merge = use_palette_merge
         self.ciede2000_merge_thresh = ciede2000_merge_thresh
         self.use_ciede2000 = use_ciede2000
-        self.protection_map: Optional[np.ndarray] = None
+        self.protection_map: np.ndarray | None = None
 
-    def kmeans_lab(self, image: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
+    def kmeans_lab(self, image: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Perform K-means clustering in LAB color space with saturation-biased sampling.
 
@@ -173,8 +172,8 @@ class ColorQuantizer:
         return bool(color_variance < self.monochrome_variance_threshold)
 
     def quantize(
-        self, image: np.ndarray, num_colors: Optional[int] = None
-    ) -> Tuple[np.ndarray, ColorPalette]:
+        self, image: np.ndarray, num_colors: int | None = None
+    ) -> tuple[np.ndarray, ColorPalette]:
         """
         Complete quantization pipeline.
 
@@ -247,10 +246,10 @@ class ColorQuantizer:
                 # centers_lab is now `merged_centers`, we need to convert to std lab
                 std_colors = cv_to_std_lab(centers_lab)
 
-                K = centers_lab.shape[0]
-                dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+                k_total = centers_lab.shape[0]
+                dists = np.zeros((pixels.shape[0], k_total), dtype=np.float32)
 
-                for ki in range(K):
+                for ki in range(k_total):
                     dists[:, ki] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[ki]])
             else:
                 # Assign pixels to the closest new merged center using standard euclidean distance
@@ -273,7 +272,7 @@ class ColorQuantizer:
         # Generate hex colors
         hex_colors = []
         for rgb in centers_rgb[0]:
-            hex_color = "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
+            hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
             hex_colors.append(hex_color)
 
         palette = ColorPalette(

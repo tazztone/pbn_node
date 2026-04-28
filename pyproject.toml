@@ -17,7 +17,7 @@ line-length = 100
 
 [tool.ruff.lint]
 # Enable Pyflakes (F), Pycodestyle (E, W), and Isort (I)
-select = ["F", "E", "W", "I"]
+select = ["F", "E", "W", "I", "N", "UP", "B", "A", "C4"]
 ignore = []
 
 [tool.ruff.format]

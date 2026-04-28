@@ -2,7 +2,6 @@
 Raster renderer for Paint-by-Numbers results.
 """
 
-from typing import Dict
 
 import cv2
 import numpy as np
@@ -18,7 +17,7 @@ class PBNRenderer:
 
     def render(
         self,
-        regions: Dict[int, Polygon],
+        regions: dict[int, Polygon],
         labels: LabelData,
         palette: ColorPalette,
         width: int,

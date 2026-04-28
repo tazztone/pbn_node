@@ -3,7 +3,6 @@ Label placement module implementing Polylabel algorithm for optimal label positi
 """
 
 import time
-from typing import Dict
 
 import numpy as np
 from shapely.geometry import Point, Polygon
@@ -134,7 +133,7 @@ class LabelPlacer:
             estimated_radius = np.sqrt(polygon.area / np.pi)
             return float(estimated_radius)
 
-    def place_labels(self, regions: Dict[int, Polygon]) -> LabelData:
+    def place_labels(self, regions: dict[int, Polygon]) -> LabelData:
         """
         Complete label placement pipeline.
 
