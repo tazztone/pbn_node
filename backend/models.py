@@ -59,8 +59,6 @@ class ProcessingParameters:
             raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
         if not (2 <= self.min_region_width <= 20):
             raise ValueError("min_region_width must be between 2 and 20")
-        if self.label_mode not in ["centroid", "polylabel"]:
-            raise ValueError("label_mode must be 'centroid' or 'polylabel'")
 
 
 @dataclass

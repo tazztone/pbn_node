@@ -25,7 +25,6 @@ class ImageProcessor:
         """Initialize the image processor with all module instances."""
         self.preprocessor = Preprocessor()
         self.svg_generator = SVGGenerator()
-        self.protector = None
 
     def process_array(
         self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None
@@ -51,18 +50,17 @@ class ImageProcessor:
             preprocessed, metadata = self.preprocessor.preprocess(image_bgr)
 
             # Generate protection map if enabled
-            use_content_protect = getattr(params, "use_content_protect", False)
+            use_content_protect = params.use_content_protect
             protection_map = None
             if use_content_protect:
-                if self.protector is None:
-                    from .backend.preprocessing.protector import Protector
+                from .backend.preprocessing.protector import Protector
 
-                    self.protector = Protector()
+                protector = Protector()
                 logger.info("Generating content protection map")
-                protection_map = self.protector.generate_protection_map(preprocessed)
+                protection_map = protector.generate_protection_map(preprocessed)
 
             # Apply SLIC superpixels if enabled
-            use_slic = getattr(params, "use_slic", True)
+            use_slic = params.use_slic
             if use_slic:
                 logger.info("Applying SLIC superpixels")
                 import numpy as np
@@ -87,19 +85,20 @@ class ImageProcessor:
 
             # Make quantizer use protection map
             from .backend.quantization.quantizer import ColorQuantizer
-            quantizer = ColorQuantizer()
-            quantizer.protection_map = protection_map
 
-            # Apply configuration to quantizer
-            quantizer.use_palette_merge = getattr(params, "use_palette_merge", True)
-            quantizer.ciede2000_merge_thresh = getattr(params, "ciede2000_merge_thresh", 8.0)
+            quantizer = ColorQuantizer(
+                use_palette_merge=params.use_palette_merge,
+                ciede2000_merge_thresh=params.ciede2000_merge_thresh,
+                use_ciede2000=params.use_ciede2000,
+            )
+            quantizer.protection_map = protection_map
 
             # Stage 3: Color Quantization
             logger.info("Stage 2/6: Quantizing colors")
             if api:
                 api.execution.set_progress(2, 6)
 
-            use_budget_split = getattr(params, "use_budget_split", False)
+            use_budget_split = params.use_budget_split
             if use_budget_split and params.num_colors and params.num_colors >= 4:
                 import numpy as np
 
@@ -157,16 +156,11 @@ class ImageProcessor:
                     h, w = lab_image.shape[:2]
                     pixels = lab_image.reshape(-1, 3)
 
-                    use_ciede2000 = getattr(params, "use_ciede2000", True)
+                    use_ciede2000 = params.use_ciede2000
                     if use_ciede2000:
                         import skimage.color
 
-                        def cv_to_std_lab(lab):
-                            std = np.zeros_like(lab)
-                            std[..., 0] = lab[..., 0] * 100.0 / 255.0
-                            std[..., 1] = lab[..., 1] - 128.0
-                            std[..., 2] = lab[..., 2] - 128.0
-                            return std
+                        from .backend.utils.color import cv_to_std_lab
 
                         std_pixels = cv_to_std_lab(pixels)
                         std_colors = cv_to_std_lab(merged_colors_lab)
@@ -175,7 +169,9 @@ class ImageProcessor:
                         dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
 
                         for k in range(K):
-                            dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+                            dists[:, k] = skimage.color.deltaE_ciede2000(
+                                std_pixels, std_colors[[k]]
+                            )
                     else:
                         diffs = pixels[:, np.newaxis, :] - merged_colors_lab[np.newaxis, :, :]
                         dists = np.sum(diffs**2, axis=2)
@@ -198,9 +194,7 @@ class ImageProcessor:
                         color_count=len(merged_colors_lab),
                     )
             else:
-                quantized, palette = quantizer.quantize(
-                    input_for_quantization, params.num_colors
-                )
+                quantized, palette = quantizer.quantize(input_for_quantization, params.num_colors)
 
             # Stage 4: Region Segmentation
             logger.info("Stage 3/6: Segmenting regions")
@@ -219,8 +213,8 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(4, 6)
             from .backend.vectorization.vectorizer import Vectorizer
-            vectorizer = Vectorizer()
-            vectorizer.use_bezier_smooth = getattr(params, "use_bezier_smooth", False)
+
+            vectorizer = Vectorizer(use_bezier_smooth=params.use_bezier_smooth)
             vectorized_regions = vectorizer.vectorize(region_data, params.simplification)
 
             # Optional: Remove speckles
@@ -237,8 +231,8 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(5, 6)
             from .backend.labeling.label_placer import LabelPlacer
-            label_placer = LabelPlacer()
-            label_placer.label_mode = getattr(params, "label_mode", "polylabel")
+
+            label_placer = LabelPlacer(label_mode=params.label_mode)
             label_data = label_placer.place_labels(cleaned_regions)
 
             # Stage 7: SVG Generation
@@ -254,12 +248,8 @@ class ImageProcessor:
                 label_data,
                 palette,
                 shared_borders=shared_borders,
-                use_shared_borders=params.use_shared_borders
-                if hasattr(params, "use_shared_borders")
-                else True,
-                print_mode=params.output_mode == "print_svg"
-                if hasattr(params, "output_mode")
-                else False,
+                use_shared_borders=params.use_shared_borders,
+                print_mode=(params.output_mode == "print_svg"),
             )
 
             # Calculate processing time

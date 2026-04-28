@@ -18,7 +18,12 @@ class ColorQuantizer:
     accurate LAB color space with automatic k selection.
     """
 
-    def __init__(self, use_palette_merge: bool = True, ciede2000_merge_thresh: float = 8.0):
+    def __init__(
+        self,
+        use_palette_merge: bool = True,
+        ciede2000_merge_thresh: float = 8.0,
+        use_ciede2000: bool = True,
+    ):
         """Initialize quantizer with default parameters."""
         self.min_k = 2
         self.max_k = 40
@@ -28,6 +33,7 @@ class ColorQuantizer:
         self.monochrome_k = 3
         self.use_palette_merge = use_palette_merge
         self.ciede2000_merge_thresh = ciede2000_merge_thresh
+        self.use_ciede2000 = use_ciede2000
         self.protection_map = None
 
     def kmeans_lab(self, image: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -192,6 +198,7 @@ class ColorQuantizer:
         # Post-KMeans perceptual palette merge
         if self.use_palette_merge and len(centers_lab) > 1:
             import skimage.color
+
             from ..utils.color import cv_to_std_lab
 
             std_centers = cv_to_std_lab(centers_lab)
@@ -235,9 +242,21 @@ class ColorQuantizer:
             h, w = lab_image.shape[:2]
             pixels = lab_image.reshape(-1, 3)
 
-            # Assign pixels to the closest new merged center using standard euclidean distance
-            diffs = pixels[:, np.newaxis, :] - centers_lab[np.newaxis, :, :]
-            dists = np.sum(diffs**2, axis=2)
+            if self.use_ciede2000:
+                std_pixels = cv_to_std_lab(pixels)
+                # centers_lab is now `merged_centers`, we need to convert to std lab
+                std_colors = cv_to_std_lab(centers_lab)
+
+                K = centers_lab.shape[0]
+                dists = np.zeros((pixels.shape[0], K), dtype=np.float32)
+
+                for k in range(K):
+                    dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+            else:
+                # Assign pixels to the closest new merged center using standard euclidean distance
+                diffs = pixels[:, np.newaxis, :] - centers_lab[np.newaxis, :, :]
+                dists = np.sum(diffs**2, axis=2)
+
             labels = np.argmin(dists, axis=1)
 
             quantized_pixels = centers_lab[labels]
