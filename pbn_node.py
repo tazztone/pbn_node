@@ -26,10 +26,28 @@ class PaintByNumberNode(io.ComfyNode):
             description="Transforms an image into a paint-by-number template.",
             is_output_node=True,
             inputs=[
-                io.Image.Input("image", tooltip="Input image(s) to process."),
-                io.Image.Input("albedo", optional=True, tooltip="Optional albedo image."),
                 io.Image.Input(
-                    "segmentation", optional=True, tooltip="Optional segmentation/mask image."
+                    "image",
+                    tooltip=(
+                        "Input image to transform into a Paint-by-Number template. "
+                        "Supports batch processing."
+                    ),
+                ),
+                io.Image.Input(
+                    "albedo",
+                    optional=True,
+                    tooltip=(
+                        "Optional albedo (flat color) map. Helps improve color accuracy by "
+                        "ignoring lighting and shading details."
+                    ),
+                ),
+                io.Image.Input(
+                    "segmentation",
+                    optional=True,
+                    tooltip=(
+                        "Optional segmentation map to enforce region boundaries. Highly "
+                        "recommended for complex scenes or to protect specific subjects."
+                    ),
                 ),
                 # io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
                 io.Int.Input(
@@ -37,7 +55,10 @@ class PaintByNumberNode(io.ComfyNode):
                     default=0,
                     min=0,
                     max=30,
-                    tooltip="Number of colors in the palette. Use 0 for automatic detection.",
+                    tooltip=(
+                        "Target number of colors in the final palette. Set to 0 to automatically "
+                        "determine the optimal count based on image complexity."
+                    ),
                 ),
                 io.Float.Input(
                     "simplification",
@@ -47,22 +68,28 @@ class PaintByNumberNode(io.ComfyNode):
                     step=0.1,
                     display_mode=io.NumberDisplay.slider,
                     tooltip=(
-                        "Contour simplification tolerance. "
-                        "Higher values mean smoother but less detailed shapes."
+                        "Tolerance for smoothing region boundaries. Higher values (up to 2.0) "
+                        "create simpler, more 'painterly' shapes, while lower values (down to 0.5) "
+                        "preserve fine details."
                     ),
                 ),
                 io.Boolean.Input(
                     "use_watershed",
                     default=False,
                     tooltip=(
-                        "Use watershed segmentation. Slower but more accurate for complex images."
+                        "Enables watershed-based segmentation. Recommended for complex images "
+                        "with many fine details, though it is slower than the default method."
                     ),
                 ),
                 io.Combo.Input(
                     "output_mode",
                     options=["colored", "outline", "quantized", "print_svg"],
                     default="colored",
-                    tooltip="Choose the visualization style of the result.",
+                    tooltip=(
+                        "Choose the visualization style: 'colored' for the final template, "
+                        "'outline' for line-art, 'quantized' for the posterized image, "
+                        "or 'print_svg' for vector output."
+                    ),
                 ),
                 # Phase 5 inputs
                 io.Combo.Input(
@@ -70,13 +97,38 @@ class PaintByNumberNode(io.ComfyNode):
                     options=["fast", "balanced", "portrait", "custom"],
                     default="balanced",
                     tooltip=(
-                        "Presets for advanced settings. Select 'custom' to use "
-                        "the manual advanced parameters below."
+                        "Presets for advanced settings. 'portrait' protects faces/skin tones; "
+                        "'balanced' is for general use; 'fast' prioritizes speed. "
+                        "Select 'custom' to manually adjust advanced parameters below."
                     ),
                 ),
-                io.Boolean.Input("use_slic", default=True, advanced=True),
-                io.Boolean.Input("use_ciede2000", default=True, advanced=True),
-                io.Boolean.Input("use_palette_merge", default=True, advanced=True),
+                io.Boolean.Input(
+                    "use_slic",
+                    default=True,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Use SLIC clustering for more uniform and shape-consistent "
+                        "initial segmentation."
+                    ),
+                ),
+                io.Boolean.Input(
+                    "use_ciede2000",
+                    default=True,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Use the CIEDE2000 formula for perceptually accurate color "
+                        "matching and palette merging."
+                    ),
+                ),
+                io.Boolean.Input(
+                    "use_palette_merge",
+                    default=True,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Automatically merges visually similar colors to optimize "
+                        "the palette size."
+                    ),
+                ),
                 io.Float.Input(
                     "ciede2000_merge_thresh",
                     default=8.0,
@@ -84,39 +136,110 @@ class PaintByNumberNode(io.ComfyNode):
                     max=20.0,
                     step=0.5,
                     advanced=True,
+                    tooltip=(
+                        "(Advanced) Threshold for merging similar colors. Higher values result "
+                        "in a more condensed palette."
+                    ),
                 ),
-                io.Boolean.Input("use_thin_cleanup", default=True, advanced=True),
-                io.Int.Input("min_region_width", default=5, min=2, max=20, advanced=True),
-                io.Boolean.Input("use_shared_borders", default=True, advanced=True),
+                io.Boolean.Input(
+                    "use_thin_cleanup",
+                    default=True,
+                    advanced=True,
+                    tooltip="(Advanced) Removes very thin regions that are difficult to paint.",
+                ),
+                io.Int.Input(
+                    "min_region_width",
+                    default=5,
+                    min=2,
+                    max=20,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Minimum pixel width for a region. Smaller regions are "
+                        "merged into neighbors."
+                    ),
+                ),
+                io.Boolean.Input(
+                    "use_shared_borders",
+                    default=True,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Uses shared paths in SVG to prevent 'white gaps' between "
+                        "regions when rendering."
+                    ),
+                ),
                 io.Combo.Input(
                     "label_mode",
                     options=["centroid", "polylabel"],
                     default="polylabel",
                     advanced=True,
+                    tooltip=(
+                        "(Advanced) 'polylabel' ensures labels are placed in the most visible "
+                        "part of complex shapes; 'centroid' uses the mathematical center."
+                    ),
                 ),
-                io.Boolean.Input("use_bezier_smooth", default=False, advanced=True),
-                io.Boolean.Input("use_content_protect", default=False, advanced=True),
-                io.Float.Input(
-                    "subject_priority", default=2.0, min=1.0, max=5.0, step=0.1, advanced=True
+                io.Boolean.Input(
+                    "use_bezier_smooth",
+                    default=False,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Smooths boundaries using Bezier curves for a more "
+                        "professional, hand-drawn look."
+                    ),
+                ),
+                io.Boolean.Input(
+                    "use_content_protect",
+                    default=False,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Uses the segmentation map to prevent important subjects "
+                        "from being overly simplified."
+                    ),
                 ),
                 io.Float.Input(
-                    "material_weight", default=0.5, min=0.0, max=1.0, step=0.1, advanced=True
+                    "subject_priority",
+                    default=2.0,
+                    min=1.0,
+                    max=5.0,
+                    step=0.1,
+                    advanced=True,
+                    tooltip="(Advanced) Weighting multiplier for the protected subject regions.",
+                ),
+                io.Float.Input(
+                    "material_weight",
+                    default=0.5,
+                    min=0.0,
+                    max=1.0,
+                    step=0.1,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Balance between the original photo and the albedo map. "
+                        "1.0 uses albedo only, 0.0 uses photo only."
+                    ),
                 ),
                 # io.Float.Input(
                 #     "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
                 # ),
             ],
             outputs=[
-                io.Image.Output("IMAGE", tooltip="The rendered paint-by-number image."),
+                io.Image.Output(
+                    "IMAGE",
+                    tooltip=(
+                        "The rendered result (colored template, line-art, or quantized image) "
+                        "as a pixel image."
+                    ),
+                ),
                 io.String.Output(
                     "SVG",
                     display_name="SVG Content",
-                    tooltip="The vector representation in SVG format.",
+                    tooltip=(
+                        "High-quality vector SVG content, ideal for high-resolution printing "
+                        "or editing in vector software."
+                    ),
                 ),
                 io.Int.Output(
                     "COLOR_COUNT",
                     display_name="Color Count",
-                    tooltip="The final number of colors in the palette.",
+                    tooltip="The final number of colors used in the generated palette.",
                 ),
             ],
         )
