@@ -1,13 +1,10 @@
-"""
-Main image processing pipeline orchestrator adapted for numpy arrays.
-"""
-
+import dataclasses
 import logging
 import time
 
 import cv2
 
-from .backend.models import ProcessingParameters, SVGResult
+from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
 from .backend.preprocessing.preprocessor import Preprocessor
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
@@ -47,7 +44,12 @@ class ImageProcessor:
             logger.info("Stage 1/6: Preprocessing image")
             if api:
                 api.execution.set_progress(1, 6)
-            preprocessed, metadata = self.preprocessor.preprocess(image_bgr)
+            preprocessed, metadata = self.preprocessor.preprocess(
+                image_bgr,
+                use_painterly=params.use_painterly_preprocess,
+                painterly_sigma_s=params.painterly_sigma_s,
+                painterly_sigma_r=params.painterly_sigma_r,
+            )
 
             # Generate protection map if enabled
             use_content_protect = params.use_content_protect
@@ -104,15 +106,36 @@ class ImageProcessor:
                 input_for_quantization, params.num_colors, perception=params.perception
             )
 
+            # Auto-albedo: estimate albedo via MSR if no external albedo provided
+            if params.use_auto_albedo and (
+                params.perception is None or params.perception.albedo is None
+            ):
+                from .backend.preprocessing.retinex import multiscale_retinex
+
+                logger.info("Estimating auto-albedo via MSR Retinex")
+                auto_albedo = multiscale_retinex(input_for_quantization)
+                new_perception = (
+                    dataclasses.replace(params.perception, albedo=auto_albedo)
+                    if params.perception
+                    else PerceptionInputs(albedo=auto_albedo)
+                )
+                params = dataclasses.replace(params, perception=new_perception)
+
             # Stage 4: Region Segmentation
             logger.info("Stage 3/6: Segmenting regions")
             if api:
                 api.execution.set_progress(3, 6)
+
+            lineart_map = params.perception.lineart if params.perception else None
+            lineart_strength = params.perception.lineart_strength if params.perception else 0.0
+
             segmenter = RegionSegmenter(
                 use_watershed=params.use_watershed,
                 use_ciede2000=params.use_ciede2000,
                 use_thin_cleanup=params.use_thin_cleanup,
                 min_region_width=params.min_region_width,
+                edge_weight_map=lineart_map,
+                lineart_strength=lineart_strength,
             )
             region_data = segmenter.segment(quantized, palette.colors)
 
@@ -145,7 +168,8 @@ class ImageProcessor:
                 api.execution.set_progress(5, 6)
             from .backend.labeling.label_placer import LabelPlacer
 
-            label_placer = LabelPlacer(label_mode=params.label_mode)
+            lineart_map = params.perception.lineart if params.perception else None
+            label_placer = LabelPlacer(label_mode=params.label_mode, lineart=lineart_map)
             label_data = label_placer.place_labels(cleaned_regions)
 
             # Stage 7: SVG Generation

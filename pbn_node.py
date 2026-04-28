@@ -48,6 +48,37 @@ class PaintByNumberNode(io.ComfyNode):
                         "protect important details like faces or hands."
                     ),
                 ),
+                io.Image.Input(
+                    "lineart",
+                    optional=True,
+                    tooltip=(
+                        "Optional edge map (e.g., from HED, SoftEdge, or Canny preprocessors). "
+                        "This tells the node where strong visual boundaries are, preventing "
+                        "color regions from bleeding across lines. Any single-channel edge "
+                        "map works — wire any 'comfyui_controlnet_aux' preprocessor here."
+                    ),
+                ),
+                io.Float.Input(
+                    "lineart_strength",
+                    default=0.7,
+                    min=0.0,
+                    max=1.0,
+                    step=0.05,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) How strongly the lineart edges influence region boundaries. "
+                        "Higher values create sharper boundaries at edges but may fragment regions."
+                    ),
+                ),
+                io.Boolean.Input(
+                    "invert_lineart",
+                    default=False,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Enable if your preprocessor outputs white lines on black "
+                        "background (e.g., standard Canny)."
+                    ),
+                ),
                 # io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
                 io.Int.Input(
                     "num_colors",
@@ -214,10 +245,42 @@ class PaintByNumberNode(io.ComfyNode):
                     max=1.0,
                     step=0.1,
                     advanced=True,
+                    tooltip=("1.0 uses pure albedo (flattest look); 0.5 blends them for balance."),
+                ),
+                io.Boolean.Input(
+                    "use_auto_albedo",
+                    default=False,
+                    advanced=True,
                     tooltip=(
-                        "(Advanced) How much to trust the Albedo map vs the Original Photo. "
-                        "1.0 uses pure albedo (flattest look); 0.5 blends them for balance."
+                        "(Advanced) Automatically estimates shadow-free colors using Retinex. "
+                        "Useful for portraits with harsh lighting. Only activates when no "
+                        "external Albedo map is wired."
                     ),
+                ),
+                io.Boolean.Input(
+                    "use_painterly_preprocess",
+                    default=False,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Applies a 'painterly' filter to the image before processing. "
+                        "This helps simplify textures and can lead to cleaner color regions."
+                    ),
+                ),
+                io.Float.Input(
+                    "painterly_sigma_s",
+                    default=60.0,
+                    min=10.0,
+                    max=200.0,
+                    advanced=True,
+                    tooltip="(Advanced) Spatial sigma for the painterly filter.",
+                ),
+                io.Float.Input(
+                    "painterly_sigma_r",
+                    default=0.45,
+                    min=0.1,
+                    max=1.0,
+                    advanced=True,
+                    tooltip="(Advanced) Range sigma for the painterly filter.",
                 ),
                 # io.Float.Input(
                 #     "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
@@ -256,6 +319,9 @@ class PaintByNumberNode(io.ComfyNode):
         output_mode,
         albedo=None,
         segmentation=None,
+        lineart=None,
+        lineart_strength=0.7,
+        invert_lineart=False,
         normal=None,
         preset="balanced",
         use_slic=True,
@@ -270,6 +336,10 @@ class PaintByNumberNode(io.ComfyNode):
         use_content_protect=False,
         subject_priority=2.0,
         material_weight=0.5,
+        use_auto_albedo=False,
+        use_painterly_preprocess=False,
+        painterly_sigma_s=60.0,
+        painterly_sigma_r=0.45,
         edge_influence=0.3,
     ):
         use_auto_mask = False
@@ -297,6 +367,8 @@ class PaintByNumberNode(io.ComfyNode):
                 use_bezier_smooth = False
                 use_content_protect = True
                 use_auto_mask = True
+                # Portraits benefit greatly from shadow removal
+                use_auto_albedo = True
             else:
                 raise ValueError(f"Unknown preset: {preset}")
 
@@ -326,8 +398,22 @@ class PaintByNumberNode(io.ComfyNode):
 
         normal_np = torch_to_bgr(normal)
 
+        lineart_np = None
+        if lineart is not None:
+            arr = lineart[0].cpu().numpy()  # [H, W, C] float32
+            if arr.ndim == 3:
+                arr = np.mean(arr, axis=2)  # RGB → grayscale
+            lineart_np = arr.astype(np.float32)
+            # Normalize to [0,1]
+            vmin, vmax = lineart_np.min(), lineart_np.max()
+            if vmax - vmin > 1e-6:
+                lineart_np = (lineart_np - vmin) / (vmax - vmin)
+            if invert_lineart:
+                lineart_np = 1.0 - lineart_np
+
         has_perception = (
-            any(x is not None for x in [albedo_np, segmentation_np, normal_np]) or use_auto_mask
+            any(x is not None for x in [albedo_np, segmentation_np, normal_np, lineart_np])
+            or use_auto_mask
         )
 
         perception = None
@@ -336,6 +422,9 @@ class PaintByNumberNode(io.ComfyNode):
                 albedo=albedo_np,
                 segmentation_mask=segmentation_np,
                 normal_map=normal_np,
+                lineart=lineart_np,
+                lineart_strength=lineart_strength,
+                invert_lineart=invert_lineart,
                 subject_priority=subject_priority,
                 material_weight=material_weight,
                 edge_influence=edge_influence,
@@ -369,6 +458,10 @@ class PaintByNumberNode(io.ComfyNode):
             perception=perception,
             preset=preset,
             output_mode=output_mode,
+            use_auto_albedo=use_auto_albedo,
+            use_painterly_preprocess=use_painterly_preprocess,
+            painterly_sigma_s=painterly_sigma_s,
+            painterly_sigma_r=painterly_sigma_r,
         )
 
         for i in range(batch_size):

@@ -17,11 +17,12 @@ class LabelPlacer:
     and font size calculation based on inscribed circle radius.
     """
 
-    def __init__(self, label_mode: str = "polylabel"):
+    def __init__(self, label_mode: str = "polylabel", lineart: np.ndarray | None = None):
         """Initialize label placer with default parameters.
 
         Args:
             label_mode: "polylabel" or "centroid"
+            lineart: Optional edge weight map for label exclusion
         """
         self.initial_precision = 1.0
         self.min_precision = 0.01
@@ -31,6 +32,21 @@ class LabelPlacer:
         self.max_font_size = 24
         self.font_size_factor = 0.6
         self.label_mode = label_mode
+        self.lineart = lineart
+        self._exclusion_mask: np.ndarray | None = None
+
+        if lineart is not None:
+            import cv2
+
+            h, w = lineart.shape[:2]
+            # Build exclusion zone: dilate binary edge map
+            # Any pixel with edge > 0.3 is considered "on a line"
+            binary = (lineart > 0.3).astype(np.uint8) * 255
+            # Scale dilation by image size (~1.2% of shorter dimension)
+            dilation_px = max(3, int(min(h, w) * 0.012))
+            kernel = np.ones((dilation_px, dilation_px), dtype=np.uint8)
+            # Dilate twice to create a safe buffer
+            self._exclusion_mask = cv2.dilate(binary, kernel, iterations=2)
 
     def polylabel_placement(self, polygon: Polygon, precision: float = 1.0) -> Point:
         """
@@ -164,6 +180,20 @@ class LabelPlacer:
                 if not polygon.contains(label_position):
                     # If not contained, use centroid as fallback
                     label_position = polygon.centroid
+
+                # Verify position is not on an edge (Phase 2 No-Fly Zone)
+                if self._exclusion_mask is not None:
+                    px, py = int(label_position.x), int(label_position.y)
+                    h, w = self._exclusion_mask.shape[:2]
+                    if 0 <= py < h and 0 <= px < w and self._exclusion_mask[py, px] > 0:
+                        # Position is on a line! Try fallback nudge
+                        # First fallback: centroid (often safer if polylabel hit a line)
+                        label_position = polygon.centroid
+                        px2, py2 = int(label_position.x), int(label_position.y)
+                        if 0 <= py2 < h and 0 <= px2 < w and self._exclusion_mask[py2, px2] > 0:
+                            # Centroid also hit a line - use representative_point
+                            # (guaranteed to be inside, though not necessarily pretty)
+                            label_position = polygon.representative_point()
 
                 positions[region_id] = label_position
 

@@ -23,7 +23,7 @@ perception-aware and content-aware system.
 | 9 | **Vectorized adjacency scanning** | 🟡 Performance | 🟢 Low | ✅ Done | ★★★★☆ |
 | 10 | **Palette chart output** | 🟡 UX | 🟢 Low | 📅 Planned | ★★★★☆ |
 | 11 | **Palette merge defaults fix** | 🟡 UX | 🟢 Trivial | 📅 Planned | ★★★★☆ |
-| 12 | **Lineart exclusion mask** | 🟡 Medium | 🟢 Low | 📅 Planned | ★★★☆☆ |
+| 12 | **Lineart exclusion mask** | 🟡 Medium | 🟢 Low | ✅ Done | ★★★☆☆ |
 | 13 | **numbers_density parameter** | 🟡 Medium | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
 | 14 | **Content-Aware Budget Split** | 🟢 High | 🟡 Moderate | ✅ Done | ★★★★☆ |
 | 15 | **Perceptual Palette Sorting** | 🟡 UX | 🟢 Low | 📅 Planned | ★★★☆☆ |
@@ -93,11 +93,14 @@ Rewrote the adjacency graph building and shared border detection logic using
 NumPy vectorized operations, significantly reducing processing time for large
 images.
 
-### Perception Stack (Albedo & Segmentation)
-Implemented the unified perception stack architecture. This includes support for
-optional albedo maps (material-aware quantization) and segmentation-guided
-budget splitting. The system now supports proportional color allocation with
-`subject_priority` weighting for non-background regions.
+### Perception Stack v2
+Introduced semantic awareness to the region segmentation and labeling pipeline.
+The system now uses lineart maps to guide the smoothing filter, preventing
+color-bleeding across semantic boundaries. It also implements an automated
+shadow-removal fallback using Multiscale Retinex (MSR) and a "no-fly zone"
+logic that nudges labels away from region outlines to improve readability.
+An optional painterly pre-filter further simplifies complex textures before
+processing.
 
 ### Content-Aware Budget Splitting
 Implemented a multi-segment quantization pipeline that uses an external
@@ -141,19 +144,6 @@ Rename the exposed parameter from `ciede2000_merge_thresh` to
 
 ---
 
-### Lineart exclusion mask for label placement
-
-Accept an optional `lineart_image` input. Dilate it with `cv2.dilate()` and
-use the result as an exclusion zone inside `LabelPlacer` — candidate label
-positions that fall within the dilated mask are skipped. This prevents numbers
-from being placed directly on stroke lines, improving readability on
-high-contrast outlines.
-
-- **Status:** Planned.
-- **Impact:** Meaningful improvement for users who supply a lineart pass
-  (e.g. from Canny, HED, or Sapiens2).
-
----
 
 ### `numbers_density` parameter
 
@@ -170,24 +160,6 @@ the painter to follow without confusion.
 - **Status:** Planned.
 - **Impact:** Medium. Requires `LabelData` interface change.
 
----
-
-### Content-Aware Budget Splitting
-
-Add a unified `mask` input (compatible with Semantic Masks, Depth Maps, or
-Manual Masks). If provided, this mask replaces the Otsu-based background
-detection.
-
-Support per-segment budget allocation via a new `portrait` preset: run KMeans
-separately on each semantic region (e.g. skin, hair, clothing, background) with
-proportional color budgets, then merge the palettes before the shared
-quantization step. This ensures skin tones are preserved even when the
-background is colorful.
-
-- **Status:** Planned.
-- **Impact:** High for portraits and complex scenes.
-
----
 
 ### Perceptual Palette Sorting
 

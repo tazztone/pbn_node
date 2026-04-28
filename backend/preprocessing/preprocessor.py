@@ -81,12 +81,23 @@ class Preprocessor:
         height, width = image.shape[:2]
         return "portrait" if height > width else "landscape"
 
-    def preprocess(self, image: np.ndarray) -> tuple[np.ndarray, ImageMetadata]:
+        return "portrait" if height > width else "landscape"
+
+    def preprocess(
+        self,
+        image: np.ndarray,
+        use_painterly: bool = False,
+        painterly_sigma_s: float = 60.0,
+        painterly_sigma_r: float = 0.45,
+    ) -> tuple[np.ndarray, ImageMetadata]:
         """
         Complete preprocessing pipeline.
 
         Args:
             image: Input image (BGR format from cv2.imread)
+            use_painterly: Whether to apply painterly stylization
+            painterly_sigma_s: Spatial sigma for stylization
+            painterly_sigma_r: Range sigma for stylization
 
         Returns:
             Tuple of (preprocessed_image, metadata)
@@ -104,6 +115,10 @@ class Preprocessor:
             file_size=file_size,
             image_type=image_type,
         )
+
+        # Optional painterly pre-filter
+        if use_painterly:
+            image = cv2.stylization(image, sigma_s=painterly_sigma_s, sigma_r=painterly_sigma_r)
 
         # Apply bilateral filter
         filtered = self.bilateral_filter(image)

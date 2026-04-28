@@ -35,6 +35,9 @@ class PerceptionInputs:
     albedo: np.ndarray | None = None
     segmentation_mask: np.ndarray | None = None
     normal_map: np.ndarray | None = None
+    lineart: np.ndarray | None = None  # [H,W] float32 [0,1] edge weight map
+    lineart_strength: float = 0.7
+    invert_lineart: bool = False
     background_ids: list[int] = field(default_factory=lambda: [0])
     subject_priority: float = 2.0
     edge_influence: float = 0.3
@@ -48,6 +51,8 @@ class PerceptionInputs:
             raise ValueError("subject_priority must be >= 1.0")
         if not (0.0 <= self.edge_influence <= 1.0):
             raise ValueError("edge_influence must be between 0.0 and 1.0")
+        if not (0.0 <= self.lineart_strength <= 1.0):
+            raise ValueError("lineart_strength must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -72,6 +77,10 @@ class ProcessingParameters:
     perception: PerceptionInputs | None = None
     preset: str = "balanced"
     output_mode: str = "colored"
+    use_auto_albedo: bool = False
+    use_painterly_preprocess: bool = False
+    painterly_sigma_s: float = 60.0
+    painterly_sigma_r: float = 0.45
 
     def __post_init__(self):
         # Validate simplification range

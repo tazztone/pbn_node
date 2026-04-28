@@ -25,6 +25,8 @@ class RegionSegmenter:
         use_ciede2000: bool = True,
         use_thin_cleanup: bool = True,
         min_region_width: int = 5,
+        edge_weight_map: np.ndarray | None = None,
+        lineart_strength: float = 0.0,
     ):
         """
         Initialize segmenter with configuration options.
@@ -42,6 +44,8 @@ class RegionSegmenter:
         self.use_ciede2000 = use_ciede2000
         self.use_thin_cleanup = use_thin_cleanup
         self.min_region_width = min_region_width
+        self.edge_weight_map = edge_weight_map
+        self.lineart_strength = lineart_strength
 
     def watershed_transform(self, quantized: np.ndarray, markers: np.ndarray) -> np.ndarray:
         """
@@ -109,6 +113,13 @@ class RegionSegmenter:
             for start, end, _ in runs:
                 width = end - start + 1
                 if width < min_width:
+                    # Edge veto: skip merge if run crosses strong edge
+                    if self.edge_weight_map is not None:
+                        # self.edge_weight_map is already resized in segment()
+                        edge_vals = self.edge_weight_map[y, start : end + 1]
+                        if np.max(edge_vals) > 0.4:  # veto threshold
+                            continue
+
                     # Find dominant neighbor
                     left_val = row[start - 1] if start > 0 else -1
                     right_val = row[end + 1] if end < w - 1 else -1
@@ -139,6 +150,12 @@ class RegionSegmenter:
             for start, end, _ in runs:
                 width = end - start + 1
                 if width < min_width:
+                    # Edge veto: skip merge if run crosses strong edge
+                    if self.edge_weight_map is not None:
+                        edge_vals = self.edge_weight_map[start : end + 1, x]
+                        if np.max(edge_vals) > 0.4:
+                            continue
+
                     # Find dominant neighbor
                     top_val = col[start - 1] if start > 0 else -1
                     bottom_val = col[end + 1] if end < h - 1 else -1
@@ -206,18 +223,35 @@ class RegionSegmenter:
         if len(unique_ids) <= 1:
             return mat
 
-        counts = np.zeros((len(unique_ids), h, w), dtype=np.int32)
-        kernel = np.ones((9, 9), dtype=np.int32)
+        counts = np.zeros((len(unique_ids), h, w), dtype=np.float32)
+        kernel = np.ones((9, 9), dtype=np.float32)
+
+        # Build per-pixel attenuation from lineart
+        # 1.0 = full vote, 0.0 = no vote (strong edge)
+        attenuation = None
+        if self.edge_weight_map is not None and self.lineart_strength > 0:
+            attenuation = (1.0 - (self.edge_weight_map * self.lineart_strength)).astype(np.float32)
 
         # For each color, count its neighbors in a 9x9 window
         for i, val in enumerate(unique_ids):
-            mask = (mat == val).astype(np.int32)
+            mask = (mat == val).astype(np.float32)
+            if attenuation is not None:
+                mask *= attenuation  # edge pixels contribute less to neighbor votes
             # Use OpenCV's filter2D for fast convolution
             counts[i] = cv2.filter2D(mask, -1, kernel, borderType=cv2.BORDER_REFLECT)
 
         # Get the ID with the maximum count at each pixel
         idx = np.argmax(counts, axis=0)
-        return unique_ids[idx]
+        smoothed = unique_ids[idx]
+
+        # Phase 1 refinement: preserve original colors at strong edges
+        # This prevents the majority vote from 'eating' thin details on lines
+        if self.edge_weight_map is not None and self.lineart_strength > 0:
+            # We use 0.5 as a threshold for "strong edge"
+            edge_mask = self.edge_weight_map > 0.5
+            smoothed[edge_mask] = mat[edge_mask]
+
+        return smoothed
 
     def _get_regions_pbnify(self, mat: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
         """
@@ -421,9 +455,13 @@ class RegionSegmenter:
         Returns:
             RegionData with segmented regions, borders, and adjacency graph
         """
-        # CONFIGURABLE SEGMENTATION: Choose between watershed and direct color segmentation
-        # Watershed (use_watershed=True): Original spec implementation with cluster centers
-        # Direct (use_watershed=False): Faster alternative using direct pixel assignment
+        # Centralized resizing of edge weight map
+        if self.edge_weight_map is not None:
+            h, w = quantized.shape[:2]
+            if self.edge_weight_map.shape[:2] != (h, w):
+                self.edge_weight_map = cv2.resize(
+                    self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR
+                )
 
         if self.use_watershed:
             # Original watershed implementation
