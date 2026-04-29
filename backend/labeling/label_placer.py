@@ -169,22 +169,30 @@ class LabelPlacer:
         skipped_regions = set()
 
         for region_id, polygon in regions.items():
-            # Check if region is too small
-            if self.should_skip_label(polygon):
-                skipped_regions.add(region_id)
-                continue
+            # Check if region is too small for standard placement
+            is_too_small = self.should_skip_label(polygon)
 
             # Find optimal label position
             try:
-                if self.label_mode == "polylabel":
-                    label_position = self.polylabel_placement(polygon, self.initial_precision)
+                label_position = None
+
+                if not is_too_small:
+                    if self.label_mode == "polylabel":
+                        label_position = self.polylabel_placement(polygon, self.initial_precision)
+                    else:
+                        label_position = polygon.centroid
                 else:
-                    label_position = polygon.centroid
+                    # Fallback for small regions (16-100 px²): use centroid or representative_point
+                    # These are skipped by should_skip_label but we want a 2nd pass
+                    if polygon.area >= 10:  # Tiny threshold for 2nd pass
+                        label_position = polygon.centroid
+                    else:
+                        skipped_regions.add(region_id)
+                        continue
 
                 # Verify position is within polygon
-                if not polygon.contains(label_position):
-                    # If not contained, use centroid as fallback
-                    label_position = polygon.centroid
+                if label_position is None or not polygon.contains(label_position):
+                    label_position = polygon.representative_point()
 
                 # Verify position is not on an edge (Phase 2 No-Fly Zone)
                 if self._exclusion_mask is not None:
@@ -192,7 +200,7 @@ class LabelPlacer:
                     h, w = self._exclusion_mask.shape[:2]
                     if 0 <= py < h and 0 <= px < w and self._exclusion_mask[py, px] > 0:
                         # Position is on a line! Try fallback chain:
-                        # 1. Centroid (often safer if polylabel hit a line)
+                        # 1. Centroid (if not already used)
                         label_position = polygon.centroid
                         px2, py2 = int(label_position.x), int(label_position.y)
                         if 0 <= py2 < h and 0 <= px2 < w and self._exclusion_mask[py2, px2] > 0:
@@ -217,13 +225,16 @@ class LabelPlacer:
                                     break
 
                             if not found_clear:
-                                # 3. Last resort: guaranteed interior but suboptimal
+                                # 3. Last resort: force representative_point even if on line
                                 label_position = polygon.representative_point()
 
                 positions[region_id] = label_position
 
                 # Calculate font size
                 font_size = self.calculate_font_size(polygon)
+                # If it was a small region, ensure font is tiny
+                if is_too_small:
+                    font_size = self.tiny_font_size
                 font_sizes[region_id] = font_size
 
             except Exception:

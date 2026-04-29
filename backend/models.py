@@ -69,6 +69,7 @@ class ProcessingParameters:
     use_painterly_preprocess: bool = False
     painterly_sigma_s: float = 60.0
     painterly_sigma_r: float = 0.45
+    smoothing_kernel_size: int = 9
 
     def __post_init__(self):
         # Validate simplification range

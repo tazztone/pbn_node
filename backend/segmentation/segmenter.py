@@ -29,6 +29,7 @@ class RegionSegmenter:
         min_region_width: int = 5,
         edge_weight_map: np.ndarray | None = None,
         lineart_strength: float = 0.0,
+        smoothing_kernel_size: int = 9,
     ):
         """
         Initialize segmenter with configuration options.
@@ -48,6 +49,7 @@ class RegionSegmenter:
         self.min_region_width = min_region_width
         self.edge_weight_map = edge_weight_map
         self.lineart_strength = lineart_strength
+        self.smoothing_kernel_size = smoothing_kernel_size
 
     def watershed_transform(self, quantized: np.ndarray, markers: np.ndarray) -> np.ndarray:
         """
@@ -117,9 +119,12 @@ class RegionSegmenter:
                 if width < min_width:
                     # Edge veto: skip merge if run crosses strong edge
                     if self.edge_weight_map is not None:
-                        # self.edge_weight_map is already resized in segment()
                         edge_vals = self.edge_weight_map[y, start : end + 1]
-                        if np.max(edge_vals) > 0.4:  # veto threshold
+                        # Veto threshold scales with lineart_strength:
+                        # strong lineart (1.0) -> low threshold (0.1) -> easy veto
+                        # weak lineart (0.0) -> high threshold (0.8) -> hard veto
+                        veto_threshold = max(0.1, 0.8 - (self.lineart_strength * 0.7))
+                        if np.max(edge_vals) > veto_threshold:
                             continue
 
                     # Find dominant neighbor
@@ -155,7 +160,8 @@ class RegionSegmenter:
                     # Edge veto: skip merge if run crosses strong edge
                     if self.edge_weight_map is not None:
                         edge_vals = self.edge_weight_map[start : end + 1, x]
-                        if np.max(edge_vals) > 0.4:
+                        veto_threshold = max(0.1, 0.8 - (self.lineart_strength * 0.7))
+                        if np.max(edge_vals) > veto_threshold:
                             continue
 
                     # Find dominant neighbor
@@ -221,7 +227,8 @@ class RegionSegmenter:
             return mat
 
         counts = np.zeros((len(unique_ids), h, w), dtype=np.float32)
-        kernel = np.ones((9, 9), dtype=np.float32)
+        k_size = self.smoothing_kernel_size
+        kernel = np.ones((k_size, k_size), dtype=np.float32)
 
         # Build per-pixel attenuation from lineart
         # 1.0 = full vote, 0.0 = no vote (strong edge)
@@ -245,9 +252,9 @@ class RegionSegmenter:
         # This prevents the majority vote from 'eating' thin details on lines
         if self.edge_weight_map is not None and self.lineart_strength > 0:
             # Scale threshold based on lineart_strength:
-            # strength 1.0 -> threshold 0.4 (very protective)
+            # strength 1.0 -> threshold 0.2 (very protective)
             # strength 0.0 -> threshold 1.0 (no protection)
-            threshold = 1.0 - (self.lineart_strength * 0.6)
+            threshold = 1.0 - (self.lineart_strength * 0.8)
             edge_mask = self.edge_weight_map > threshold
             smoothed[edge_mask] = mat[edge_mask]
 

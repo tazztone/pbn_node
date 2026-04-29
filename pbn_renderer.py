@@ -58,7 +58,7 @@ class PBNRenderer:
                 color_idx = (
                     region_colors[region_id]
                     if (region_colors and region_id in region_colors)
-                    else (region_id - 1)
+                    else 0  # Should not happen if pipeline is correct
                 ) % len(palette.hex_colors)
 
                 hex_color = palette.hex_colors[color_idx]
@@ -78,7 +78,8 @@ class PBNRenderer:
                 # Draw shared borders with the region color to fill gaps
                 for border in shared_borders[region_id]:
                     border_pts = np.array(border.coords, dtype=np.int32)
-                    cv2.polylines(canvas, [border_pts], False, color, 1)
+                    # Use thickness 2 to ensure coverage of raster gaps
+                    cv2.polylines(canvas, [border_pts], False, color, 2)
 
         # 2b. Draw all shared borders as black lines in print_svg mode to match SVG
         if mode == "print_svg" and use_shared_borders and shared_borders:
@@ -102,8 +103,9 @@ class PBNRenderer:
                     color_idx = region_colors[region_id] % len(palette.hex_colors)
                     label_text = str(region_colors[region_id] + 1)
                 else:
-                    color_idx = (region_id - 1) % len(palette.hex_colors)
-                    label_text = str(region_id)
+                    # Fallback only if mapping is missing
+                    color_idx = 0
+                    label_text = "?"
 
                 # Ensure visibility in colored mode
                 if is_colored:

@@ -363,6 +363,31 @@ class PaintByNumberNode(io.ComfyNode):
                     advanced=True,
                     tooltip="(Advanced) Range sigma for the painterly filter.",
                 ),
+                io.Int.Input(
+                    "slic_n_segments",
+                    default=500,
+                    min=100,
+                    max=5000,
+                    advanced=True,
+                    tooltip="(Advanced) Number of superpixel segments for SLIC clustering.",
+                ),
+                io.Float.Input(
+                    "slic_compactness",
+                    default=10.0,
+                    min=0.01,
+                    max=100.0,
+                    advanced=True,
+                    tooltip="(Advanced) Compactness factor for SLIC clustering.",
+                ),
+                io.Int.Input(
+                    "smoothing_kernel_size",
+                    default=9,
+                    min=3,
+                    max=21,
+                    step=2,
+                    advanced=True,
+                    tooltip="(Advanced) Size of the majority smoothing kernel (must be odd).",
+                ),
             ],
             outputs=[
                 io.Image.Output(
@@ -422,6 +447,9 @@ class PaintByNumberNode(io.ComfyNode):
         use_painterly_preprocess=False,
         painterly_sigma_s=60.0,
         painterly_sigma_r=0.45,
+        slic_n_segments=500,
+        slic_compactness=10.0,
+        smoothing_kernel_size=9,
     ):
         # 1. Resolve Presets
         kwargs = {
@@ -457,6 +485,9 @@ class PaintByNumberNode(io.ComfyNode):
             "use_painterly_preprocess": use_painterly_preprocess,
             "painterly_sigma_s": painterly_sigma_s,
             "painterly_sigma_r": painterly_sigma_r,
+            "slic_n_segments": slic_n_segments,
+            "slic_compactness": slic_compactness,
+            "smoothing_kernel_size": smoothing_kernel_size,
         }
         params = cls._resolve_presets(kwargs)
 
@@ -495,8 +526,9 @@ class PaintByNumberNode(io.ComfyNode):
             use_painterly_preprocess=params.get("use_painterly_preprocess", False),
             painterly_sigma_s=params.get("painterly_sigma_s", 60.0),
             painterly_sigma_r=params.get("painterly_sigma_r", 0.45),
-            slic_n_segments=500,
-            slic_compactness=10.0,
+            slic_n_segments=params.get("slic_n_segments", 500),
+            slic_compactness=params.get("slic_compactness", 10.0),
+            smoothing_kernel_size=params.get("smoothing_kernel_size", 9),
         )
 
         # 4. Batch loop

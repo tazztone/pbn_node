@@ -165,6 +165,7 @@ class ImageProcessor:
                 min_region_width=p.min_region_width,
                 edge_weight_map=lineart_map,
                 lineart_strength=lineart_strength,
+                smoothing_kernel_size=p.smoothing_kernel_size,
             )
             region_data = segmenter.segment(quantized, palette.colors)
 
