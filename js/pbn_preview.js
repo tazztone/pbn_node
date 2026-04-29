@@ -43,30 +43,13 @@ app.registerExtension({
         this.pbn_svg_img = img;
 
         // Add as a DOM widget so it moves with the node
-        const widget = this.addDOMWidget("pbn_svg_preview", "custom", container, {
+        this.addDOMWidget("pbn_svg_preview", "custom", container, {
           serialize: false,
           getValue() {
             return "";
           },
           setValue(v) {},
         });
-
-        // Set up computeSize so the node knows how tall the widget is
-        widget.computeSize = function (width) {
-          return [width, this.computedHeight || 300];
-        };
-
-        this.pbn_svg_widget = widget;
-      };
-
-      // Handle horizontal node resizing smoothly
-      const onResize = nodeType.prototype.onResize;
-      nodeType.prototype.onResize = function (size) {
-        onResize?.apply(this, arguments);
-        if (this.pbn_svg_widget && this.pbn_svg_widget.aspectRatio) {
-            const newHeight = Math.floor(size[0] * this.pbn_svg_widget.aspectRatio);
-            this.pbn_svg_widget.computedHeight = newHeight;
-        }
       };
 
       // 2. Hook onExecuted to update the preview with new SVG data
@@ -91,22 +74,8 @@ app.registerExtension({
             t: Date.now(), // Cache busting
           });
 
-          // When image loads, adjust the node size to match aspect ratio
           this.pbn_svg_img.onload = () => {
-            const aspect = this.pbn_svg_img.naturalHeight / this.pbn_svg_img.naturalWidth;
-            this.pbn_svg_widget.aspectRatio = aspect;
-            const width = this.size[0];
-            const imgHeight = Math.floor(width * aspect);
-
-            // Only update if height changed significantly
-            if (Math.abs((this.pbn_svg_widget.computedHeight || 0) - imgHeight) > 2) {
-              this.pbn_svg_widget.computedHeight = imgHeight;
-
-              // Recalculate node size
-              const size = this.computeSize();
-              this.setSize([this.size[0], size[1]]);
-            }
-            this.setDirtyCanvas(true, true);
+             this.setDirtyCanvas(true, true);
           };
 
           this.pbn_svg_img.onerror = () => {
