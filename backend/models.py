@@ -60,6 +60,8 @@ class ProcessingParameters:
     label_mode: Literal["centroid", "polylabel"] = "polylabel"
     use_bezier_smooth: bool = False
     use_content_protect: bool = False
+    slic_n_segments: int = 500
+    slic_compactness: float = 10.0
     perception: PerceptionInputs | None = None
     preset: str = "balanced"
     output_mode: str = "colored"
@@ -76,6 +78,10 @@ class ProcessingParameters:
             raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
         if not (2 <= self.min_region_width <= 20):
             raise ValueError("min_region_width must be between 2 and 20")
+        if not (100 <= self.slic_n_segments <= 5000):
+            raise ValueError("slic_n_segments must be between 100 and 5000")
+        if not (0.01 <= self.slic_compactness <= 100.0):
+            raise ValueError("slic_compactness must be between 0.01 and 100.0")
 
 
 @dataclass

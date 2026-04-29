@@ -9,9 +9,11 @@ import skimage.segmentation
 
 from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
+from .backend.preprocessing.normal_features import augment_image_with_normals
 from .backend.preprocessing.preprocessor import Preprocessor
 from .backend.preprocessing.protector import Protector
 from .backend.preprocessing.retinex import multiscale_retinex
+from .backend.preprocessing.sapiens_priority import build_priority_map
 from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
@@ -75,18 +77,14 @@ class ImageProcessor:
                 normal_strength = perception.normal_strength if perception else 0.0
 
                 if normal_map is not None and normal_strength > 0:
-                    from .backend.preprocessing.normal_features import (
-                        augment_image_with_normals,
-                    )
-
                     # Build 5-channel LAB + normal-feature image for SLIC
                     lab_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2LAB).astype(np.float32)
                     slic_input = augment_image_with_normals(lab_image, normal_map, normal_strength)
                     # skimage.slic with channel_axis=-1, multichannel feature space
                     segments = skimage.segmentation.slic(
                         slic_input,
-                        n_segments=500,
-                        compactness=10,
+                        n_segments=params.slic_n_segments,
+                        compactness=params.slic_compactness,
                         start_label=1,
                         channel_axis=-1,  # treat last dim as features, not spatial
                     )
@@ -94,7 +92,10 @@ class ImageProcessor:
                     # Standard RGB SLIC (existing behavior)
                     rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
                     segments = skimage.segmentation.slic(
-                        rgb_image, n_segments=500, compactness=10, start_label=1
+                        rgb_image,
+                        n_segments=params.slic_n_segments,
+                        compactness=params.slic_compactness,
+                        start_label=1,
                     )
 
                 superpixel_img = skimage.color.label2rgb(
@@ -112,14 +113,11 @@ class ImageProcessor:
             )
             quantizer.protection_map = protection_map
 
-            # Sapiens Body-Part Adaptive Priority
             if (
                 params.perception is not None
                 and params.perception.segmentation_mask is not None
                 and params.perception.segmentation_mask.ndim == 2  # grayscale class map
             ):
-                from .backend.preprocessing.sapiens_priority import build_priority_map
-
                 priority_map = build_priority_map(params.perception.segmentation_mask)
                 # Merge with any existing protection map
                 if protection_map is not None:

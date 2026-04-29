@@ -78,14 +78,12 @@ def build_normal_feature_channels(
         curvature /= curvature_max  # normalize to [0,1]
 
     weight = normal_strength * target_scale
-    # Channels 1-3: Raw XYZ (provides absolute surface orientation)
-    xyz = normal_map * weight
-    # Channel 4: angular gradient (crease detector)
-    ang_grad = normal_angular_gradient(normal_map) * weight
-    # Channel 5: mean curvature
-    curvature = curvature * weight
+    # Channel 1: angular gradient (crease detector)
+    ang_grad_weighted = ang_grad * weight
+    # Channel 2: mean curvature
+    curvature_weighted = curvature * weight
 
-    out = np.concatenate([xyz, ang_grad[..., np.newaxis], curvature[..., np.newaxis]], axis=2)
+    out = np.stack([ang_grad_weighted, curvature_weighted], axis=2)
     return out.astype(np.float32)
 
 

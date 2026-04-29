@@ -279,6 +279,18 @@ class PaintByNumberNode(io.ComfyNode):
                     advanced=True,
                     tooltip=("1.0 uses pure albedo (flattest look); 0.5 blends them for balance."),
                 ),
+                io.Float.Input(
+                    "edge_influence",
+                    default=0.3,
+                    min=0.0,
+                    max=1.0,
+                    step=0.05,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Weight of lineart edges on color quantization. High values "
+                        "ensure color boundaries strictly follow edges."
+                    ),
+                ),
                 io.Boolean.Input(
                     "use_auto_albedo",
                     default=False,
@@ -314,9 +326,6 @@ class PaintByNumberNode(io.ComfyNode):
                     advanced=True,
                     tooltip="(Advanced) Range sigma for the painterly filter.",
                 ),
-                # io.Float.Input(
-                #     "edge_influence", default=0.3, min=0.0, max=1.0, step=0.1, advanced=True
-                # ),
             ],
             outputs=[
                 io.Image.Output(
@@ -354,7 +363,6 @@ class PaintByNumberNode(io.ComfyNode):
         lineart=None,
         lineart_strength=0.7,
         invert_lineart=False,
-        normal=None,
         preset="balanced",
         use_slic=True,
         use_ciede2000=True,
@@ -368,11 +376,11 @@ class PaintByNumberNode(io.ComfyNode):
         use_content_protect=False,
         subject_priority=2.0,
         material_weight=0.5,
+        edge_influence=0.3,
         use_auto_albedo=False,
         use_painterly_preprocess=False,
         painterly_sigma_s=60.0,
         painterly_sigma_r=0.45,
-        edge_influence=0.3,
         normals=None,
         normal_strength=0.4,
         segmentation_format="auto",
@@ -509,6 +517,8 @@ class PaintByNumberNode(io.ComfyNode):
             use_painterly_preprocess=use_painterly_preprocess,
             painterly_sigma_s=painterly_sigma_s,
             painterly_sigma_r=painterly_sigma_r,
+            slic_n_segments=500,  # Default values (not yet in schema)
+            slic_compactness=10.0,
         )
 
         for i in range(batch_size):
