@@ -15,7 +15,8 @@ results.
 - **Fast smoothing:** A vectorized majority filter provides real-time region
   smoothing even on high-resolution images.
 - **Multiple output modes:** You can choose between colored previews,
-  print-ready outlines, or raw quantized views.
+  print-ready outlines, or raw quantized views. Colored previews now accurately
+  reflect paint numbers and shared color identity across regions.
 - **Automatic color detection:** The node automatically selects the optimal
   number of colors for your image if you don't specify a count.
 - **SVG export:** Generates raw SVG content that you can use in vector editing

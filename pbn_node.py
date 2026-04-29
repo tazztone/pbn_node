@@ -547,6 +547,7 @@ class PaintByNumberNode(io.ComfyNode):
                     w,
                     h,
                     mode=output_mode,
+                    region_colors=result.region_colors,
                 )
 
             # Convert back to torch tensor [H, W, 3] RGB float32

@@ -75,9 +75,10 @@ sharp, zoomable previews and supports batch execution through a scrollable DOM
 widget.
 
 ### Region numbering by color identity
-Modified the pipeline and SVG generator to use color-based indexing for labels.
-This ensures all disconnected islands of the same color share the same number,
-correctly reflecting the "Paint by Number" logic.
+Modified the pipeline, SVG generator, and raster renderer to use color-based
+indexing for labels. This ensures all disconnected islands of the same color
+share the same number and fill color, correctly reflecting the "Paint by Number"
+logic in both vector and raster outputs.
 
 ### Pairwise palette merge
 Replaced the greedy sequential merge with a robust pairwise CIEDE2000 distance

@@ -42,6 +42,7 @@ tests/
 ├── run_tests.py         # Wrapper script for environment setup
 ├── unit/                # Fast tests for individual backend modules
 │   ├── test_pbn_node.py
+│   ├── test_pbn_renderer.py
 │   ├── test_preprocessing.py
 │   ├── test_quantization.py
 │   └── test_segmentation.py
@@ -57,7 +58,7 @@ tests/
 We use unit tests for isolated logic and integration tests for end-to-end
 pipeline verification.
 
-### Unit tests (15 tests)
+### Unit tests (20 tests)
 
 Fast tests that validate individual backend components without ComfyUI
 dependencies.
@@ -79,6 +80,11 @@ dependencies.
 | `test_budget_allocation_min_k` | Minimum k per segment check |
 | `test_albedo_guided_quantization_shift` | Albedo influence verification |
 | `test_normal_guided_slic_crease_preservation` | Normal map geometric alignment |
+| `test_fill_uses_region_colors_mapping` | Renderer color mapping accuracy |
+| `test_label_text_shows_paint_number` | Label text vs paint number check |
+| `test_label_contrast_uses_mapped_color` | Contrast visibility per region |
+| `test_fallback_when_region_colors_is_none` | Renderer backward compatibility |
+| `test_multiple_regions_same_color` | Label consistency across islands |
 
 ### Integration tests (4 tests)
 
@@ -143,6 +149,7 @@ Follow these patterns when adding new tests to maintain consistency.
 ```python
 import pytest
 from pbn_node.backend.preprocessing.preprocessor import Preprocessor
+
 
 @pytest.mark.unit
 def test_my_function():

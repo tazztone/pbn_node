@@ -180,7 +180,7 @@ class ImageProcessor:
             logger.info("Removing speckles")
             cleaned_regions, updated_region_colors = vectorizer.remove_speckles(
                 vectorized_regions,
-                region_data.region_colors,
+                dict(region_data.region_colors),
                 palette.colors,
                 threshold=vectorizer.speckle_threshold,
             )
@@ -229,6 +229,7 @@ class ImageProcessor:
                 cleaned_regions=cleaned_regions,
                 label_data=label_data,
                 quantized=quantized,
+                region_colors=renumbered_colors,
             )
 
         except Exception as e:

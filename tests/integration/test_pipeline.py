@@ -21,6 +21,7 @@ def test_image_processor_full_run(sample_image_np):
     assert result.cleaned_regions is not None
     assert result.label_data is not None
     assert result.quantized is not None
+    assert result.region_colors and len(result.region_colors) == result.region_count
 
 
 @pytest.mark.integration

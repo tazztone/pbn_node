@@ -139,3 +139,4 @@ class SVGResult:
     cleaned_regions: dict
     label_data: "LabelData"
     quantized: np.ndarray
+    region_colors: dict[int, int] = field(default_factory=dict)

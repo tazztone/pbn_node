@@ -22,6 +22,7 @@ class PBNRenderer:
         width: int,
         height: int,
         mode: str = "colored",
+        region_colors: dict[int, int] | None = None,
     ) -> np.ndarray:
         """
         Render PBN to numpy array.
@@ -33,6 +34,7 @@ class PBNRenderer:
             width: Image width
             height: Image height
             mode: "colored" | "outline" | "print_svg"
+            region_colors: Optional mapping of region ID to color index (0-based)
 
         Returns:
             Rendered image in BGR format
@@ -48,8 +50,12 @@ class PBNRenderer:
         for region_id, polygon in regions.items():
             # Get color
             if mode == "colored":
-                # Map region ID to color (assuming 1-indexed regions)
-                color_idx = (region_id - 1) % len(palette.hex_colors)
+                # Map region ID to color index
+                if region_colors and region_id in region_colors:
+                    color_idx = region_colors[region_id] % len(palette.hex_colors)
+                else:
+                    color_idx = (region_id - 1) % len(palette.hex_colors)
+
                 hex_color = palette.hex_colors[color_idx].lstrip("#")
                 # Convert hex to BGR
                 color = tuple(int(hex_color[i : i + 2], 16) for i in (4, 2, 0))
@@ -75,9 +81,16 @@ class PBNRenderer:
                 font_scale = font_size / 24.0
                 color = (0, 0, 0)
 
+                # Determine the paint number for this region
+                if region_colors and region_id in region_colors:
+                    color_idx = region_colors[region_id] % len(palette.hex_colors)
+                    label_text = str(region_colors[region_id] + 1)
+                else:
+                    color_idx = (region_id - 1) % len(palette.hex_colors)
+                    label_text = str(region_id)
+
                 # Check background color for "colored" mode to ensure text is visible
                 if mode == "colored":
-                    color_idx = (region_id - 1) % len(palette.hex_colors)
                     # Simple heuristic: if color is dark, use white text
                     hex_color = palette.hex_colors[color_idx].lstrip("#")
                     rgb = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
@@ -87,7 +100,7 @@ class PBNRenderer:
 
                 cv2.putText(
                     canvas,
-                    str(region_id),
+                    label_text,
                     (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     font_scale,
