@@ -4,7 +4,7 @@ Raster renderer for Paint-by-Numbers results.
 
 import cv2
 import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 
 from .backend.models import ColorPalette, LabelData
 
@@ -23,6 +23,8 @@ class PBNRenderer:
         height: int,
         mode: str = "colored",
         region_colors: dict[int, int] | None = None,
+        shared_borders: dict[int, list[LineString]] | None = None,
+        use_shared_borders: bool = True,
     ) -> np.ndarray:
         """
         Render PBN to numpy array.
@@ -69,9 +71,21 @@ class PBNRenderer:
             points = np.array(polygon.exterior.coords, dtype=np.int32)
             cv2.fillPoly(canvas, [points], color)
 
-            # 2. Draw outlines
+            # 2. Draw outlines or shared borders
             if is_outline_mode:
                 cv2.polylines(canvas, [points], True, (0, 0, 0), 1)
+            elif use_shared_borders and shared_borders and region_id in shared_borders:
+                # Draw shared borders with the region color to fill gaps
+                for border in shared_borders[region_id]:
+                    border_pts = np.array(border.coords, dtype=np.int32)
+                    cv2.polylines(canvas, [border_pts], False, color, 1)
+
+        # 2b. Draw all shared borders as black lines in print_svg mode to match SVG
+        if mode == "print_svg" and use_shared_borders and shared_borders:
+            for borders in shared_borders.values():
+                for border in borders:
+                    border_pts = np.array(border.coords, dtype=np.int32)
+                    cv2.polylines(canvas, [border_pts], False, (0, 0, 0), 1)
 
         # 3. Draw labels
         for region_id, point in labels.positions.items():

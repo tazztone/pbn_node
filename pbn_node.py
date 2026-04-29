@@ -526,6 +526,8 @@ class PaintByNumberNode(io.ComfyNode):
                     h,
                     mode=output_mode,
                     region_colors=result.region_colors,
+                    shared_borders=result.shared_borders,
+                    use_shared_borders=params.get("use_shared_borders", True),
                 )
 
             # Convert back to torch RGB
@@ -544,7 +546,11 @@ class PaintByNumberNode(io.ComfyNode):
             "pbn_svg": svg_results,
         }
 
-        return io.NodeOutput(final_image, svg_contents[0], color_counts[0], ui=ui_output)
+        # Handle single vs batch for non-tensor outputs
+        out_svg = svg_contents if batch_size > 1 else svg_contents[0]
+        out_colors = color_counts if batch_size > 1 else color_counts[0]
+
+        return io.NodeOutput(final_image, out_svg, out_colors, ui=ui_output)
 
     @staticmethod
     def _resolve_presets(kwargs: dict[str, Any]) -> dict[str, Any]:

@@ -244,8 +244,11 @@ class RegionSegmenter:
         # Phase 1 refinement: preserve original colors at strong edges
         # This prevents the majority vote from 'eating' thin details on lines
         if self.edge_weight_map is not None and self.lineart_strength > 0:
-            # We use 0.8 as a threshold for "strong edge" to avoid noise
-            edge_mask = self.edge_weight_map > 0.8
+            # Scale threshold based on lineart_strength:
+            # strength 1.0 -> threshold 0.4 (very protective)
+            # strength 0.0 -> threshold 1.0 (no protection)
+            threshold = 1.0 - (self.lineart_strength * 0.6)
+            edge_mask = self.edge_weight_map > threshold
             smoothed[edge_mask] = mat[edge_mask]
 
         return smoothed

@@ -27,8 +27,9 @@ class LabelPlacer:
         self.initial_precision = 1.0
         self.min_precision = 0.01
         self.timeout_ms = 100
-        self.min_region_area = 100  # pixels²
+        self.min_region_area = 16  # pixels² (4x4)
         self.min_font_size = 8
+        self.tiny_font_size = 5
         self.max_font_size = 24
         self.font_size_factor = 0.6
         self.label_mode = label_mode
@@ -103,8 +104,12 @@ class LabelPlacer:
         radius = self.inscribed_circle_radius(polygon)
         font_size = int(radius * self.font_size_factor)
 
-        # Clamp to min/max range
-        font_size = max(self.min_font_size, min(self.max_font_size, font_size))
+        # For tiny regions, allow font size to drop further to tiny_font_size
+        if polygon.area < 100:
+            font_size = max(self.tiny_font_size, min(self.max_font_size, font_size))
+        else:
+            # Clamp to standard min/max range
+            font_size = max(self.min_font_size, min(self.max_font_size, font_size))
 
         return font_size
 

@@ -131,3 +131,4 @@ class SVGResult:
     label_data: LabelData
     quantized: np.ndarray
     region_colors: dict[int, int] = field(default_factory=dict)
+    shared_borders: dict[int, list[LineString]] = field(default_factory=dict)

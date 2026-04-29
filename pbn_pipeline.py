@@ -222,6 +222,7 @@ class ImageProcessor:
                 label_data=label_data,
                 quantized=quantized,
                 region_colors=renumbered_colors,
+                shared_borders=region_data.shared_borders,
             )
 
         except Exception as e:
