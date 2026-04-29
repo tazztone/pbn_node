@@ -8,9 +8,11 @@ from typing import cast
 import cv2
 import networkx as nx
 import numpy as np
+import skimage.color
 from shapely.geometry import LineString
 
 from ..models import RegionData
+from ..utils.color import cv_to_std_lab
 
 
 class RegionSegmenter:
@@ -183,12 +185,7 @@ class RegionSegmenter:
         # Vectorized distance calculation
         # Reshape image to (H*W, 3)
         pixels = quantized_lab.reshape(-1, 3)
-
         if self.use_ciede2000:
-            import skimage.color
-
-            from ..utils.color import cv_to_std_lab
-
             std_pixels = cv_to_std_lab(pixels)
             std_colors = cv_to_std_lab(colors)
 

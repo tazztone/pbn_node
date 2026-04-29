@@ -79,8 +79,6 @@ class Preprocessor:
         height, width = image.shape[:2]
         return "portrait" if height > width else "landscape"
 
-        return "portrait" if height > width else "landscape"
-
     def preprocess(
         self,
         image: np.ndarray,
@@ -98,7 +96,7 @@ class Preprocessor:
             painterly_sigma_r: Range sigma for stylization
 
         Returns:
-            Tuple of (preprocessed_image, metadata)
+            Preprocessed image (BGR format)
         """
         # Optional painterly pre-filter
         if use_painterly:
