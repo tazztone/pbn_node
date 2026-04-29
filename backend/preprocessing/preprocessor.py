@@ -5,8 +5,6 @@ Image preprocessing module implementing bilateral filtering and histogram equali
 import cv2
 import numpy as np
 
-from ..models import ImageMetadata
-
 
 class Preprocessor:
     """
@@ -89,7 +87,7 @@ class Preprocessor:
         use_painterly: bool = False,
         painterly_sigma_s: float = 60.0,
         painterly_sigma_r: float = 0.45,
-    ) -> tuple[np.ndarray, ImageMetadata]:
+    ) -> np.ndarray:
         """
         Complete preprocessing pipeline.
 
@@ -102,20 +100,6 @@ class Preprocessor:
         Returns:
             Tuple of (preprocessed_image, metadata)
         """
-        # Extract metadata
-        height, width = image.shape[:2]
-        channels = image.shape[2] if len(image.shape) == 3 else 1
-        file_size = image.nbytes
-        image_type = self.detect_image_type(image)
-
-        metadata = ImageMetadata(
-            width=width,
-            height=height,
-            channels=channels,
-            file_size=file_size,
-            image_type=image_type,
-        )
-
         # Optional painterly pre-filter
         if use_painterly:
             image = cv2.stylization(image, sigma_s=painterly_sigma_s, sigma_r=painterly_sigma_r)
@@ -126,4 +110,4 @@ class Preprocessor:
         # Apply histogram equalization
         equalized = self.histogram_equalization(filtered)
 
-        return equalized, metadata
+        return equalized

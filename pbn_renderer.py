@@ -39,8 +39,11 @@ class PBNRenderer:
         Returns:
             Rendered image in BGR format
         """
+        is_colored = mode == "colored"
+        is_outline_mode = mode in ("outline", "print_svg")
+
         # Create blank image
-        if mode == "colored":
+        if is_colored:
             canvas = np.zeros((height, width, 3), dtype=np.uint8)
         else:
             # Both "outline" and "print_svg" have white backgrounds
@@ -48,17 +51,17 @@ class PBNRenderer:
 
         # 1. Fill regions
         for region_id, polygon in regions.items():
-            # Get color
-            if mode == "colored":
+            if is_colored:
                 # Map region ID to color index
-                if region_colors and region_id in region_colors:
-                    color_idx = region_colors[region_id] % len(palette.hex_colors)
-                else:
-                    color_idx = (region_id - 1) % len(palette.hex_colors)
+                color_idx = (
+                    region_colors[region_id]
+                    if (region_colors and region_id in region_colors)
+                    else (region_id - 1)
+                ) % len(palette.hex_colors)
 
-                hex_color = palette.hex_colors[color_idx].lstrip("#")
-                # Convert hex to BGR
-                color = tuple(int(hex_color[i : i + 2], 16) for i in (4, 2, 0))
+                hex_color = palette.hex_colors[color_idx]
+                rgb = self._hex_to_rgb(hex_color)
+                color = (rgb[2], rgb[1], rgb[0])  # BGR
             else:
                 color = (255, 255, 255)  # White
 
@@ -66,8 +69,8 @@ class PBNRenderer:
             points = np.array(polygon.exterior.coords, dtype=np.int32)
             cv2.fillPoly(canvas, [points], color)
 
-            # 2. Draw outlines for "outline" and "print_svg" modes
-            if mode in ("outline", "print_svg"):
+            # 2. Draw outlines
+            if is_outline_mode:
                 cv2.polylines(canvas, [points], True, (0, 0, 0), 1)
 
         # 3. Draw labels
@@ -76,10 +79,9 @@ class PBNRenderer:
                 font_size = labels.font_sizes[region_id]
                 x, y = int(point.x), int(point.y)
 
-                # Draw text using OpenCV
-                # fontScale is roughly font_size / 20.0
+                # fontScale is roughly font_size / 24.0
                 font_scale = font_size / 24.0
-                color = (0, 0, 0)
+                text_color = (0, 0, 0)
 
                 # Determine the paint number for this region
                 if region_colors and region_id in region_colors:
@@ -89,14 +91,14 @@ class PBNRenderer:
                     color_idx = (region_id - 1) % len(palette.hex_colors)
                     label_text = str(region_id)
 
-                # Check background color for "colored" mode to ensure text is visible
-                if mode == "colored":
-                    # Simple heuristic: if color is dark, use white text
-                    hex_color = palette.hex_colors[color_idx].lstrip("#")
-                    rgb = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-                    brightness = sum(rgb) / 3
-                    if brightness < 128:
-                        color = (255, 255, 255)
+                # Ensure visibility in colored mode
+                if is_colored:
+                    hex_color = palette.hex_colors[color_idx]
+                    rgb = self._hex_to_rgb(hex_color)
+                    # Relative luminance: 0.299R + 0.587G + 0.114B
+                    luminance = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+                    if luminance < 128:
+                        text_color = (255, 255, 255)
 
                 cv2.putText(
                     canvas,
@@ -104,9 +106,16 @@ class PBNRenderer:
                     (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     font_scale,
-                    color,
+                    text_color,
                     1,
                     cv2.LINE_AA,
                 )
 
         return canvas
+
+    @staticmethod
+    def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
+        """Convert #RRGGBB hex string to (R, G, B) tuple."""
+        h = hex_str.lstrip("#")
+        vals = [int(h[i : i + 2], 16) for i in (0, 2, 4)]
+        return (vals[0], vals[1], vals[2])

@@ -52,6 +52,14 @@ class ColorQuantizer:
         _, mask = cv2.threshold(v_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         return mask
 
+    def _centers_to_palette(self, centers_lab: np.ndarray) -> ColorPalette:
+        """Helper to convert LAB centers to ColorPalette object."""
+        centers_lab_uint8 = centers_lab.astype(np.uint8).reshape(1, -1, 3)
+        centers_bgr = cv2.cvtColor(centers_lab_uint8, cv2.COLOR_LAB2BGR)
+        centers_rgb = cv2.cvtColor(centers_bgr, cv2.COLOR_BGR2RGB)
+        hex_colors = [f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}" for rgb in centers_rgb[0]]
+        return ColorPalette(colors=centers_lab, hex_colors=hex_colors, color_count=len(centers_lab))
+
     def kmeans_lab(
         self,
         image: np.ndarray,
@@ -61,15 +69,6 @@ class ColorQuantizer:
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Perform K-means clustering in LAB color space with optional albedo blending.
-
-        Args:
-            image: Input image (BGR format)
-            k: Number of clusters
-            albedo: Optional albedo image (BGR format)
-            material_weight: Weight for albedo in blending (0.0 to 1.0)
-
-        Returns:
-            Tuple of (quantized_image, cluster_centers_lab)
         """
         # Convert BGR to LAB
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -92,17 +91,13 @@ class ColorQuantizer:
         if self.protection_map is not None:
             pm_flat = self.protection_map.flatten()
             if len(pm_flat) == len(weights):
-                final_weights = weights * pm_flat
-            else:
-                final_weights = weights
-        else:
-            final_weights = weights
+                weights *= pm_flat
 
         # Perform K-means clustering
         kmeans = KMeans(
             n_clusters=k, init="k-means++", max_iter=self.max_iterations, n_init=10, random_state=42
         )
-        kmeans.fit(fit_pixels, sample_weight=final_weights)
+        kmeans.fit(fit_pixels, sample_weight=weights)
         centers = kmeans.cluster_centers_
 
         # Predict labels for all pixels
@@ -111,8 +106,6 @@ class ColorQuantizer:
         # Create quantized image
         quantized_pixels = centers[labels]
         quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
-
-        # Convert back to BGR
         quantized_bgr = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
 
         return quantized_bgr, centers
@@ -137,16 +130,12 @@ class ColorQuantizer:
 
         h, w = image.shape[:2]
 
-        # Ensure mask matches image size
         if segmentation_mask.shape[:2] != (h, w):
             segmentation_mask = cv2.resize(
                 segmentation_mask, (w, h), interpolation=cv2.INTER_NEAREST
             )
 
-        # Identify segments
         unique_labels, counts = np.unique(segmentation_mask, return_counts=True)
-
-        # Filter out very small segments (less than 0.5% of image)
         total_pixels = h * w
         valid_indices = counts > (total_pixels * 0.005)
         labels = unique_labels[valid_indices]
@@ -155,45 +144,36 @@ class ColorQuantizer:
         if len(labels) <= 1:
             return self.quantize(image, num_colors, perception=None)
 
-        # Calculate weights for each segment
-        # Background segments get weight 1.0, others get subject_priority
         weights = np.array(
             [1.0 if label in background_ids else subject_priority for label in labels]
         )
 
-        # Proportional allocation: k_seg proportional to (area * weight)
         effective_areas = areas * weights
         proportions = effective_areas / np.sum(effective_areas)
 
         k_total = num_colors
-        # Minimum 2 colors per segment to ensure detail
         k_allocated = np.maximum(2, np.round(proportions * k_total)).astype(int)
 
         # Adjust to match k_total exactly
-        for _ in range(k_total * 2):  # Bounded loop to prevent infinite risk
+        for _ in range(k_total * 2):
             current_sum = np.sum(k_allocated)
             if current_sum == k_total:
                 break
 
             if current_sum > k_total:
-                # Reduce from segment with largest k/proportion ratio
                 idx = np.argmax(k_allocated / proportions)
                 if k_allocated[idx] > 1:
                     k_allocated[idx] -= 1
                 else:
-                    # Fallback: find segment that IS > 1
                     reducible = np.where(k_allocated > 1)[0]
                     if len(reducible) == 0:
-                        break  # Cannot reduce further safely
-                    # Pick from reducible segments the one with largest ratio
+                        break
                     idx_in_reducible = np.argmax(k_allocated[reducible] / proportions[reducible])
                     k_allocated[reducible[idx_in_reducible]] -= 1
             else:
-                # Add to segment with smallest k/proportion ratio
                 idx = np.argmin(k_allocated / proportions)
                 k_allocated[idx] += 1
 
-        # Collect palettes from each segment
         all_centers = []
         for i, label in enumerate(labels):
             seg_mask = segmentation_mask == label
@@ -203,7 +183,6 @@ class ColorQuantizer:
             if albedo is not None:
                 seg_albedo = albedo[seg_mask].reshape(-1, 1, 3)
 
-            # Quantize segment
             _, seg_centers = self.kmeans_lab(
                 seg_pixels_bgr, k_allocated[i], albedo=seg_albedo, material_weight=material_weight
             )
@@ -211,14 +190,15 @@ class ColorQuantizer:
 
         merged_centers_lab = np.vstack(all_centers)
 
-        # Re-quantize the entire image with the final merged centers
+        # Re-quantize the entire image
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
         pixels = lab_image.reshape(-1, 3)
 
-        if albedo is not None:
-            fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
-        else:
-            fit_pixels = pixels
+        fit_pixels = (
+            self._blend_with_albedo(pixels, albedo, material_weight, h, w)
+            if albedo is not None
+            else pixels
+        )
 
         if self.use_ciede2000:
             std_pixels = cv_to_std_lab(fit_pixels)
@@ -236,42 +216,26 @@ class ColorQuantizer:
         quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
         quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
 
-        # Generate Palette
-        centers_lab_uint8 = merged_centers_lab.astype(np.uint8).reshape(1, -1, 3)
-        centers_bgr = cv2.cvtColor(centers_lab_uint8, cv2.COLOR_LAB2BGR)
-        centers_rgb = cv2.cvtColor(centers_bgr, cv2.COLOR_BGR2RGB)
-        hex_colors = ["#{:02x}{:02x}{:02x}".format(*rgb) for rgb in centers_rgb[0]]
-
-        palette = ColorPalette(
-            colors=merged_centers_lab, hex_colors=hex_colors, color_count=len(merged_centers_lab)
-        )
+        palette = self._centers_to_palette(merged_centers_lab)
 
         return quantized_image, palette
 
     def auto_select_k(self, image: np.ndarray) -> int:
         """
         Automatically select optimal k using KneeLocator algorithm.
-
-        Args:
-            image: Input image (BGR format)
-
-        Returns:
-            Optimal number of clusters (between min_k and k_cap)
         """
-        # Check for monochrome first
         if self.detect_monochrome(image):
             return self.monochrome_k
 
-        # Convert to LAB
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         pixels = lab_image.reshape(-1, 3).astype(np.float32)
 
-        # Sample pixels if image is too large (for performance)
         if len(pixels) > 10000:
-            indices = np.random.choice(len(pixels), 10000, replace=False)
+            # Deterministic sampling
+            rng = np.random.default_rng(42)
+            indices = rng.choice(len(pixels), 10000, replace=False)
             pixels = pixels[indices]
 
-        # Calculate inertia for different k values
         k_range = range(self.min_k, min(self.max_k + 1, len(pixels)))
         inertias = []
 
@@ -286,46 +250,22 @@ class ColorQuantizer:
             kmeans.fit(pixels)
             inertias.append(kmeans.inertia_)
 
-        # Use KneeLocator to find elbow point
         try:
             kneedle = KneeLocator(
                 list(k_range), inertias, curve="convex", direction="decreasing", online=True
             )
-
             optimal_k = kneedle.elbow if kneedle.elbow else self.min_k + 5
         except Exception:
-            # Fallback to middle of range if KneeLocator fails
             optimal_k = (self.min_k + self.max_k) // 2
 
-        # Cap k at maximum
-        optimal_k = min(optimal_k, self.k_cap)
-
-        return optimal_k
+        return min(optimal_k, self.k_cap)
 
     def detect_monochrome(self, image: np.ndarray) -> bool:
-        """
-        Detect if image is monochrome (variance < 5%).
-
-        Args:
-            image: Input image (BGR format)
-
-        Returns:
-            True if image is monochrome, False otherwise
-        """
-        # Convert to LAB
+        """Detect if image is monochrome (variance < 5%)."""
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-
-        # Calculate variance in a and b channels (color channels)
-        a_channel = lab_image[:, :, 1]
-        b_channel = lab_image[:, :, 2]
-
-        # Normalize variance to 0-1 range
-        a_variance = np.var(a_channel) / (255**2)
-        b_variance = np.var(b_channel) / (255**2)
-
-        # Average variance of color channels
+        a_variance = np.var(lab_image[:, :, 1]) / (255**2)
+        b_variance = np.var(lab_image[:, :, 2]) / (255**2)
         color_variance = (a_variance + b_variance) / 2
-
         return bool(color_variance < self.monochrome_variance_threshold)
 
     def quantize(
@@ -338,18 +278,14 @@ class ColorQuantizer:
         Complete quantization pipeline with optional perception-stack inputs.
         """
         if perception and perception.albedo is not None and perception.edge_influence > 0:
-            # Blend original image with albedo weighted by (1 - edge_map * edge_influence)
-            # Pixels at strong edges keep more original color; flat areas lean on albedo
             blend = perception.edge_influence
             if perception.lineart is not None:
-                # edge_map dims [H,W] → [H,W,1] for broadcasting
                 weight_map = perception.lineart[..., np.newaxis] * blend
                 input_image = (
                     image.astype(np.float32) * (1 - weight_map)
                     + perception.albedo.astype(np.float32) * weight_map
                 )
             else:
-                # No lineart, uniform blend
                 input_image = (
                     image.astype(np.float32) * (1 - blend)
                     + perception.albedo.astype(np.float32) * blend
@@ -358,13 +294,11 @@ class ColorQuantizer:
         else:
             input_image = image
 
-        # Determine k
-        if num_colors is None:
-            k = self.auto_select_k(input_image)
-        else:
+        if num_colors is not None:
             k = max(self.min_k, num_colors)
+        else:
+            k = self.auto_select_k(input_image)
 
-        # Use budget splitting if a segmentation mask is provided or requested via auto_mask
         seg_mask = perception.segmentation_mask if perception else None
         if seg_mask is None and perception and perception.use_auto_mask:
             seg_mask = self._get_otsu_mask(input_image)
@@ -380,7 +314,6 @@ class ColorQuantizer:
                 material_weight=perception.material_weight if perception else 0.5,
             )
 
-        # Perform initial quantization (with optional albedo)
         albedo = perception.albedo if perception else None
         material_weight = perception.material_weight if perception else 0.5
 
@@ -388,15 +321,11 @@ class ColorQuantizer:
             input_image, k, albedo=albedo, material_weight=material_weight
         )
 
-        # Post-KMeans perceptual palette merge
+        # Perceptual palette merge
+        final_k = k
         if self.use_palette_merge and len(centers_lab) > 1:
             from ..utils.color import cv_to_std_lab
 
-            # We use pairwise merging: find closest pair, merge, repeat.
-            # This is more robust than sequential merging.
-
-            # Target k: if num_colors was provided, we MUST hit it.
-            # If auto-selected, we use ciede2000_merge_thresh.
             target_k = num_colors if num_colors is not None else 0
             current_thresh = self.ciede2000_merge_thresh
 
@@ -406,7 +335,8 @@ class ColorQuantizer:
                 if n <= 1 or (target_k > 0 and n <= target_k):
                     break
 
-                # Compute all-pairs distances
+                # Optimize: Pre-calculate distance matrix would be better, but pairwise is simpler
+                # For small N (palette size), this is acceptable.
                 best_dist = float("inf")
                 best_pair = (-1, -1)
 
@@ -419,30 +349,25 @@ class ColorQuantizer:
                             best_dist = dist
                             best_pair = (i, j)
 
-                # If we have a target_k, we merge regardless of threshold until we hit it.
-                # If no target_k, we only merge if best_dist < threshold.
                 if target_k == 0 and best_dist > current_thresh:
                     break
 
                 # Merge best_pair
                 i, j = best_pair
                 new_center = np.mean(centers_lab[[i, j]], axis=0)
-
-                # Remove i and j, add new_center
                 mask = np.ones(n, dtype=bool)
                 mask[[i, j]] = False
                 centers_lab = np.vstack([centers_lab[mask], new_center[np.newaxis, :]])
 
-            # Re-quantize the image with the merged centers
+            # Re-quantize
             lab_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2LAB).astype(np.float32)
             h, w = lab_image.shape[:2]
             pixels = lab_image.reshape(-1, 3)
-
-            # Use albedo for final assignment if present
-            if albedo is not None:
-                fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
-            else:
-                fit_pixels = pixels
+            fit_pixels = (
+                self._blend_with_albedo(pixels, albedo, material_weight, h, w)
+                if albedo is not None
+                else pixels
+            )
 
             if self.use_ciede2000:
                 std_pixels = cv_to_std_lab(fit_pixels)
@@ -456,26 +381,12 @@ class ColorQuantizer:
                 dists = np.sum(diffs**2, axis=2)
 
             labels = np.argmin(dists, axis=1)
-            quantized_pixels = centers_lab[labels]
-            quantized_lab = quantized_pixels.reshape(h, w, 3).astype(np.uint8)
+            quantized_lab = centers_lab[labels].reshape(h, w, 3).astype(np.uint8)
             quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
-            merged_k = len(centers_lab)
+            final_k = len(centers_lab)
 
-        # Convert LAB centers to RGB for hex representation
-        centers_lab_uint8 = centers_lab.astype(np.uint8).reshape(1, -1, 3)
-        centers_bgr = cv2.cvtColor(centers_lab_uint8, cv2.COLOR_LAB2BGR)
-        centers_rgb = cv2.cvtColor(centers_bgr, cv2.COLOR_BGR2RGB)
-
-        # Generate hex colors
-        hex_colors = []
-        for rgb in centers_rgb[0]:
-            hex_color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-            hex_colors.append(hex_color)
-
-        palette = ColorPalette(
-            colors=centers_lab,
-            hex_colors=hex_colors,
-            color_count=merged_k if "merged_k" in locals() else k,
-        )
+        palette = self._centers_to_palette(centers_lab)
+        # Update color count explicitly if needed
+        palette.color_count = final_k
 
         return quantized_image, palette

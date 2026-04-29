@@ -133,6 +133,7 @@ def sample_image_np():
 def sample_image_tensor():
     """Create a [1, 128, 128, 3] RGB torch tensor."""
     img = np.zeros((1, 128, 128, 3), dtype=np.float32)
-    img[0, 10:50, 10:50] = [1.0, 0, 0]
-    img[0, 60:110, 60:110] = [0, 1.0, 0]
+    img[0, 10:50, 10:50] = [1.0, 0, 0]  # Red
+    img[0, 60:110, 60:110] = [0, 1.0, 0]  # Green
+    img[0, 10:50, 60:110] = [0, 0, 1.0]  # Blue
     return torch.from_numpy(img)

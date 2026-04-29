@@ -1,8 +1,8 @@
 # Project roadmap
 
-The project roadmap outlines the planned improvements and research directions
-for the ComfyUI paint-by-number node. These features are ranked by their
-potential impact on output quality and their ease of implementation.
+The project roadmap outlines the planned improvements and research directions for
+the ComfyUI paint-by-number node. These features are ranked by their potential
+impact on output quality and their ease of implementation.
 
 ## Overview
 
@@ -22,7 +22,7 @@ perception-aware and content-aware system.
 | 8 | **Flood fill O(n²) fix** | 🟢 Performance | 🟢 Trivial | ✅ Done | ★★★★★ |
 | 9 | **Vectorized adjacency scanning** | 🟡 Performance | 🟢 Low | ✅ Done | ★★★★☆ |
 | 10 | **Palette chart output** | 🟡 UX | 🟢 Low | 📅 Planned | ★★★★☆ |
-| 11 | **Palette merge defaults fix** | 🟡 UX | 🟢 Trivial | 📅 Planned | ★★★★☆ |
+| 11 | **Palette merge defaults fix** | 🟡 UX | 🟢 Trivial | ✅ Done | ★★★★☆ |
 | 12 | **Lineart exclusion mask** | 🟡 Medium | 🟢 Low | ✅ Done | ★★★☆☆ |
 | 13 | **numbers_density parameter** | 🟡 Medium | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
 | 14 | **Content-Aware Budget Split** | 🟢 High | 🟡 Moderate | ✅ Done | ★★★★☆ |
@@ -31,18 +31,18 @@ perception-aware and content-aware system.
 | 17 | **Exposed Clean-up Controls** | 🟢 Quality | 🟢 Trivial | 📅 Planned | ★★★★☆ |
 | 18 | **Interactive Palette Controls**| 🟡 UX only | 🟠 Hard (frontend)| 📅 Planned | ★★★☆☆ |
 | 19 | **Sapiens / Normal SLIC** | 🟢 Transformative | 🟡 Moderate | ✅ Done | ★★★★☆ |
-| 20 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (research) | 🧪 Research | ★★☆☆☆ |
+| 20 | **Modular Backend Refactor** | 🟢 Maintainability | 🟡 Moderate | ✅ Done | ★★★★★ |
 
 ---
 
-## ✅ Completed Features
+## ✅ Completed features
 
 These features have been implemented and are available in the current version.
 
 ### CIEDE2000 color distance
-Replaced Euclidean distance in LAB space with the `skimage.color.deltaE_ciede2000`
-formula. This provides perceptually correct palette selection, ensuring paint
-colors map more naturally to human perception.
+Replaced Euclidean distance in LAB space with the
+`skimage.color.deltaE_ciede2000` formula. This provides perceptually correct
+palette selection, ensuring paint colors map more naturally to human perception.
 
 ### Shared border segmentation
 The SVG generator now uses shared borders instead of independent contours for
@@ -71,19 +71,17 @@ of inaccessibility" (the most distant internal point from the polygon outline).
 ### SVG Vector Preview
 Implemented a custom JavaScript extension for the ComfyUI frontend that renders
 the generated SVG as a vector graphic directly in the node body. This provides
-sharp, zoomable previews and supports batch execution through a scrollable DOM
-widget.
+sharp, zoomable previews and supports batch execution.
 
 ### Region numbering by color identity
 Modified the pipeline, SVG generator, and raster renderer to use color-based
 indexing for labels. This ensures all disconnected islands of the same color
-share the same number and fill color, correctly reflecting the "Paint by Number"
-logic in both vector and raster outputs.
+share the same number and fill color.
 
 ### Pairwise palette merge
 Replaced the greedy sequential merge with a robust pairwise CIEDE2000 distance
 merger. This ensures the palette is reduced to the target size while
-prioritizing the most perceptually similar colors for merging.
+prioritizing the most perceptually similar colors.
 
 ### Flood fill O(n) optimization
 Replaced O(n²) flood fill logic with a deque-based O(n) implementation,
@@ -91,112 +89,85 @@ eliminating performance bottlenecks on high-resolution images.
 
 ### Vectorized adjacency and border scanning
 Rewrote the adjacency graph building and shared border detection logic using
-NumPy vectorized operations, significantly reducing processing time for large
-images.
+NumPy vectorized operations, significantly reducing processing time.
 
 ### Perception Stack v2
 Introduced semantic awareness to the region segmentation and labeling pipeline.
-The system now uses lineart maps to guide the smoothing filter, preventing
-color-bleeding across semantic boundaries. It also implements an automated
-shadow-removal fallback using Multiscale Retinex (MSR) and a "no-fly zone"
-logic that nudges labels away from region outlines to improve readability.
-An optional painterly pre-filter further simplifies complex textures before
-processing.
+The system uses lineart maps to guide the smoothing filter, implements automated
+shadow-removal using Retinex, and optimizes label placement.
 
 ### Content-Aware Budget Splitting
 Implemented a multi-segment quantization pipeline that uses an external
 segmentation mask (or an automatic Otsu-based fallback) to allocate independent
-color budgets to different image regions. This ensures important details in the
-subject are preserved regardless of background complexity.
+color budgets to different image regions.
 
 ### Normal-Map-Guided SLIC
-Integrated 3D geometry into the segmentation pipeline. By augmenting the SLIC
-feature space with surface-normal components (angular gradient, curvature, and
-raw XYZ), superpixel boundaries now respect physical surface creases (like
-facial features or clothing folds) even in low-contrast areas.
+Integrated 3D geometry into the segmentation pipeline. Superpixel boundaries
+now respect physical surface creases even in low-contrast areas by leveraging
+angular gradients and curvature from normal maps.
 
 ### Sapiens Body-Part Adaptive Priority
-Added support for Sapiens segmentation masks. The system now automatically
-identifies anatomical body parts (face, hands, clothing) and applies adaptive
-priority weights to the color quantization and protection maps, ensuring faces
-and hands receive higher fidelity than backgrounds.
+Added support for Sapiens segmentation masks. The system automatically
+identifies anatomical body parts and applies adaptive priority weights to the
+color quantization and protection maps.
+
+### Modular backend refactor
+Executed a comprehensive architectural overhaul to improve maintainability and
+performance. We broke down monolithic node classes into modular components,
+implemented lazy-loading for heavy dependencies, and expanded the automated
+test suite to 35 comprehensive unit and integration tests.
 
 ---
 
-## 🚀 Planned Features
+## 🚀 Planned features
 
 ### Palette chart output
 
 Add a second `IMAGE` output (`PALETTE_CHART`) to the node. A new
 `backend/palette_chart.py` module generates a fixed-width raster image showing
-one row per color: a filled swatch, the number, hex code, and RGB values. No
-new dependencies — implemented with OpenCV `cv2.rectangle` and `cv2.putText`.
-
-This gives painters a physical reference sheet to use alongside the printed
-template.
+one row per color: a filled swatch, the number, hex code, and RGB values.
 
 - **Status:** Planned.
 - **Impact:** High practical value for end users. Low effort.
 
 ---
 
-### Palette merge defaults fix
-
-`use_palette_merge` and `use_ciede2000` are already `True` in the `balanced`
-preset, but `ciede2000_merge_thresh` is not explicitly set by the preset and
-inherits the raw default of `8.0`, which is too low for natural photos.
-
-Set the `balanced` preset to use `ciede2000_merge_thresh = 10.0` explicitly.
-Rename the exposed parameter from `ciede2000_merge_thresh` to
-`color_merge_threshold` in the node schema for friendlier UX.
-
-- **Status:** Planned.
-- **Impact:** Improves out-of-the-box results with zero architectural change.
-
----
-
 ### `numbers_density` parameter
 
-Add a `numbers_density: float` parameter (default `0.0` = one label per
-region). When set, compute `n = max(1, int(polygon.area * numbers_density))`
-labels per region, placed by tiling polylabel calls on eroded sub-regions with
-a minimum spacing of ~30px. `LabelData.positions` changes from
-`dict[int, Point]` to `dict[int, list[Point]]`. Update SVG generation
-accordingly.
-
-Large regions on a physical print often require multiple number placements for
-the painter to follow without confusion.
+Add a `numbers_density: float` parameter. When set, compute multiple labels per
+region placed by tiling polylabel calls on eroded sub-regions.
 
 - **Status:** Planned.
 - **Impact:** Medium. Requires `LabelData` interface change.
 
-### Perceptual Palette Sorting
+---
 
-Sort the generated color palette and `PALETTE_CHART` by luminance or hue
-(instead of KMeans cluster order). This makes the physical paint selection
-process much more intuitive for the end-user.
+### Perceptual palette sorting
+
+Sort the generated color palette and `PALETTE_CHART` by luminance or hue. This
+makes the physical paint selection process much more intuitive for the end-user.
 
 - **Status:** Planned.
 - **Impact:** High UX value.
 
 ---
 
-### Label Collision Avoidance
+### Label collision avoidance
 
 Implement a collision detection pass in `LabelPlacer`. If two labels are too
-close (e.g. in thin neighboring regions), nudge them along their respective
-region's "pole of inaccessibility" skeleton or skip the less important one.
+close, nudge them along their respective region's skeleton or skip the less
+important one.
 
 - **Status:** Planned.
 - **Impact:** Medium labeling polish.
 
 ---
 
-### Exposed Clean-up Controls
+### Exposed clean-up controls
 
 Expose `speckle_threshold` and `min_region_width` as node parameters. Currently
-hardcoded, these controls are vital for users processing extremely noisy or
-extremely clean (flat vector) input images.
+partially hardcoded, these controls are vital for users processing extremely
+noisy or flat input images.
 
 - **Status:** Planned.
 - **Impact:** High for power users.
@@ -204,6 +175,7 @@ extremely clean (flat vector) input images.
 ---
 
 ### Interactive palette controls
+
 Building ComfyUI V3 widgets to let you manually merge or split colors. This
 requires deep integration with the ComfyUI frontend API.
 
@@ -212,11 +184,10 @@ requires deep integration with the ComfyUI frontend API.
 
 ---
 
-### SAM 3.1 / DA3 / Sapiens2 (Research Track)
+### SAM 3.1 / DA3 / Sapiens2 (Research track)
 
 Researching deep integration of state-of-the-art models for automated semantic
-segmentation and depth-aware clustering. This moves from "external mask support"
-to an internal, model-driven architecture.
+segmentation and depth-aware clustering.
 
 - **Status:** Researching.
 - **Impact:** Potentially transformative for complex scenes.
@@ -235,11 +206,9 @@ crisper, more artistically natural boundaries.
 
 ## Recommended implementation order
 
-1. **Palette merge defaults + palette chart** — UX polish, low effort
-2. **Content-Aware Budget Split** — unblocks generic mask support
-3. **Exposed Clean-up Controls** — power-user flexibility
-4. **Perceptual Palette Sorting** — labeling polish
-5. **Lineart exclusion + numbers_density** — labeling polish
-6. **Label Collision Avoidance** — final labeling refinement
-7. **Interactive palette controls** — long-term UX
-8. **Research track (SAM/DA3/Learned Edges)** — experimental features
+1.  **Palette chart + Perceptual Sorting** — UX polish, low effort
+2.  **Exposed Clean-up Controls** — power-user flexibility
+3.  **Lineart exclusion + numbers_density** — labeling polish
+4.  **Label Collision Avoidance** — final labeling refinement
+5.  **Interactive palette controls** — long-term UX
+6.  **Research track (SAM/DA3/Learned Edges)** — experimental features

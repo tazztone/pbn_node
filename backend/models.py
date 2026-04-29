@@ -31,8 +31,8 @@ class PerceptionInputs:
     def __post_init__(self):
         if not (0.0 <= self.material_weight <= 1.0):
             raise ValueError("material_weight must be between 0.0 and 1.0")
-        if not (1.0 <= self.subject_priority <= 10.0):
-            raise ValueError("subject_priority must be >= 1.0")
+        if not (1.0 <= self.subject_priority <= 5.0):
+            raise ValueError("subject_priority must be between 1.0 and 5.0")
         if not (0.0 <= self.edge_influence <= 1.0):
             raise ValueError("edge_influence must be between 0.0 and 1.0")
         if not (0.0 <= self.lineart_strength <= 1.0):
@@ -82,17 +82,8 @@ class ProcessingParameters:
             raise ValueError("slic_n_segments must be between 100 and 5000")
         if not (0.01 <= self.slic_compactness <= 100.0):
             raise ValueError("slic_compactness must be between 0.01 and 100.0")
-
-
-@dataclass
-class ImageMetadata:
-    """Metadata about the input image."""
-
-    width: int
-    height: int
-    channels: int
-    file_size: int
-    image_type: str  # "portrait" | "landscape"
+        if self.num_colors is not None and self.num_colors < 2:
+            raise ValueError("num_colors must be at least 2 if provided")
 
 
 @dataclass
@@ -137,6 +128,6 @@ class SVGResult:
     region_count: int
     label_count: int
     cleaned_regions: dict
-    label_data: "LabelData"
+    label_data: LabelData
     quantized: np.ndarray
     region_colors: dict[int, int] = field(default_factory=dict)

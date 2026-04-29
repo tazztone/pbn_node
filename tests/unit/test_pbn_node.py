@@ -84,13 +84,17 @@ class TestPaintByNumberNode:
                     output_mode="colored",
                 )
 
+                import hashlib
+
                 fname1 = out1.ui["pbn_svg"][0]["filename"]
                 fname2 = out2.ui["pbn_svg"][0]["filename"]
 
                 # Should be exactly the same due to hashing
                 assert fname1 == fname2
-                # Hash of "<svg>deterministic test</svg>"
-                assert fname1 == "pbn_87c57ef9264f7600.svg"
+
+                # Verify filename structure: pbn_<md5_hex_16>.svg
+                expected_hash = hashlib.md5(b"<svg>deterministic test</svg>").hexdigest()[:16]
+                assert fname1 == f"pbn_{expected_hash}.svg"
 
             # Verify only one file exists despite two "writes"
             files = os.listdir(temp_dir)

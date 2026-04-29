@@ -31,6 +31,8 @@ results.
   boundaries follow physical creases and anatomical features.
 - **Sapiens Adaptive Priority:** Automatically prioritizes faces, hands, and
   subject regions for higher detail preservation.
+- **Modular Backend:** A decoupled, test-driven architecture that ensures
+  stability and allows for easy extension of processing stages.
 
 ## Installation
 
@@ -77,9 +79,11 @@ The node accepts several configuration parameters to fine-tune the result.
 - **simplification:** Controls how much the region contours are simplified.
   Accepted values range from `0.5` to `2.0`.
 - **use_watershed:** When enabled, uses the watershed transform for
-  segmentation. This is more accurate to the original specification but slower.
+  segmentation. This is more accurate to the original photo but slower.
 - **output_mode:** Selects the visual style of the output image (**colored**,
   **outline**, or **quantized**).
+- **preset:** Quick configurations for different use cases (**fast**,
+  **balanced**, **portrait**, or **custom**).
 - **subject_priority:** A multiplier for color allocation to non-background
   segments when using a segmentation mask.
 - **material_weight:** Controls the influence of the albedo map over the
@@ -87,13 +91,14 @@ The node accepts several configuration parameters to fine-tune the result.
 - **edge_influence:** Controls how much the lineart edge map biases color
   quantization. High values ensure color boundaries follow edges.
 - **normals:** Optional surface normal map (from Sapiens or Depth-to-Normal).
-  Causes superpixel boundaries to align with 3D surface creases even when
-  colors are similar.
+  Causes superpixel boundaries to align with 3D surface creases.
 - **normal_strength:** How strongly the normal map influences superpixel shapes.
 - **segmentation_format:** How to interpret the segmentation map (`auto`,
   `grayscale`, or `rgb_packed`).
 - **use_auto_albedo:** When enabled, automatically estimates a shadow-free
   albedo map if no external albedo is provided.
+- **use_auto_mask:** Automatically generates a face-protection mask for
+  portraits when no external segmentation is provided.
 - **use_painterly_preprocess:** Applies a stylization filter before processing
   to simplify complex textures and produce cleaner shapes.
 
@@ -104,8 +109,8 @@ The node returns three values that you can use in your workflow.
 - **IMAGE:** The rendered raster template based on your selected output mode.
 - **SVG:** A string containing the raw SVG data for the generated template. This
   result is also previewed as a vector graphic within the node UI.
-- **COLOR_COUNT:** An integer representing the total number of colors used in
-  the final palette.
+- **COLOR_COUNT:** An integer representing the total number of unique colors in
+  the final template.
 
 ## Development
 
@@ -143,13 +148,6 @@ pip install pre-commit
 pre-commit install
 ```
 
-Once installed, the hooks will run automatically on every commit. You can also
-run them manually on all files at any time:
-
-```bash
-pre-commit run --all-files
-```
-
 ### Automated testing
 
 We use `pytest` for unit and integration testing. To ensure all mocks load
@@ -161,21 +159,6 @@ correctly, you must run tests using the provided wrapper script:
 
 For more details on the testing infrastructure, see
 [tests/TESTING.md](tests/TESTING.md).
-
-## Next steps
-
-Once you've installed the node, there are several ways to extend your workflow.
-
-- Try connecting the **SVG** output to a file-saving node to export vector
-  templates.
-- Use the **outline** mode to generate templates ready for physical printing.
-- Experiment with the **simplification** setting to balance detail and ease of
-  painting.
-
-## Roadmap
-
-For the full list of planned features and their implementation priority, see
-[ROADMAP.md](ROADMAP.md).
 
 ## License
 

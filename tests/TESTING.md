@@ -58,7 +58,7 @@ tests/
 We use unit tests for isolated logic and integration tests for end-to-end
 pipeline verification.
 
-### Unit tests (20 tests)
+### Unit tests (28 tests)
 
 Fast tests that validate individual backend components without ComfyUI
 dependencies.
@@ -86,7 +86,7 @@ dependencies.
 | `test_fallback_when_region_colors_is_none` | Renderer backward compatibility |
 | `test_multiple_regions_same_color` | Label consistency across islands |
 
-### Integration tests (4 tests)
+### Integration tests (7 tests)
 
 Tests that verify the full processing pipeline and the ComfyUI node class.
 
@@ -96,6 +96,9 @@ Tests that verify the full processing pipeline and the ComfyUI node class.
 | `test_image_processor_batch_simulation` | Processor reuse and consistency |
 | `test_pbn_node_execute` | V3 Node execution and output packing |
 | `test_pbn_node_output_modes` | Result rendering styles (colored, outline) |
+| `test_normals_integration` | Normal map influence on SLIC segmentation |
+| `test_lineart_integration` | Lineart bias on color quantization |
+| `test_combined_perception` | Stress test with all perception inputs |
 
 ---
 

@@ -18,20 +18,9 @@ def test_detect_image_type():
 
 
 @pytest.mark.unit
-def test_preprocess_metadata(sample_image_np):
-    preprocessor = Preprocessor()
-    _, metadata = preprocessor.preprocess(sample_image_np)
-
-    assert metadata.width == 128
-    assert metadata.height == 128
-    assert metadata.channels == 3
-    assert metadata.image_type == "landscape"  # 128x128 is landscape in this logic
-
-
-@pytest.mark.unit
 def test_preprocess_output_shape(sample_image_np):
     preprocessor = Preprocessor()
-    processed, _ = preprocessor.preprocess(sample_image_np)
+    processed = preprocessor.preprocess(sample_image_np)
 
     assert processed.shape == sample_image_np.shape
     assert processed.dtype == sample_image_np.dtype

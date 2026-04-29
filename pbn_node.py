@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from typing import Any
 
 import cv2
 import folder_paths
@@ -14,6 +15,35 @@ from .pbn_renderer import PBNRenderer
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Preset configuration table
+PRESETS = {
+    "fast": {
+        "use_slic": False,
+        "use_ciede2000": True,
+        "use_palette_merge": True,
+        "use_bezier_smooth": False,
+    },
+    "balanced": {
+        "use_slic": True,
+        "use_ciede2000": True,
+        "use_palette_merge": True,
+        "use_thin_cleanup": True,
+        "use_shared_borders": True,
+        "use_bezier_smooth": False,
+        "use_content_protect": False,
+    },
+    "portrait": {
+        "use_slic": True,
+        "use_ciede2000": True,
+        "use_palette_merge": True,
+        "use_thin_cleanup": True,
+        "use_shared_borders": True,
+        "use_bezier_smooth": False,
+        "use_content_protect": True,
+        "use_auto_mask": True,
+    },
+}
 
 
 class PaintByNumberNode(io.ComfyNode):
@@ -155,7 +185,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "'rgb_packed': RGB image where each unique color = one class."
                     ),
                 ),
-                # Phase 5 inputs
                 io.Combo.Input(
                     "preset",
                     options=["fast", "balanced", "portrait", "custom"],
@@ -197,14 +226,14 @@ class PaintByNumberNode(io.ComfyNode):
                 ),
                 io.Float.Input(
                     "ciede2000_merge_thresh",
-                    default=8.0,
+                    default=10.0,
                     min=2.0,
                     max=20.0,
                     step=0.5,
                     advanced=True,
                     tooltip=(
                         "(Advanced) How aggressive to be when merging similar colors. Higher "
-                        "values result in a smaller, more condensed palette."
+                        "values result in a smaller, more condensed palette. Default 10.0."
                     ),
                 ),
                 io.Boolean.Input(
@@ -302,6 +331,15 @@ class PaintByNumberNode(io.ComfyNode):
                     ),
                 ),
                 io.Boolean.Input(
+                    "use_auto_mask",
+                    default=False,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) Automatically generates a segmentation mask for portrait "
+                        "protection when none is provided."
+                    ),
+                ),
+                io.Boolean.Input(
                     "use_painterly_preprocess",
                     default=False,
                     advanced=True,
@@ -351,142 +389,15 @@ class PaintByNumberNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(
-        cls,
-        image,
-        num_colors,
-        simplification,
-        use_watershed,
-        output_mode,
-        albedo=None,
-        segmentation=None,
-        lineart=None,
-        lineart_strength=0.7,
-        invert_lineart=False,
-        preset="balanced",
-        use_slic=True,
-        use_ciede2000=True,
-        use_palette_merge=True,
-        ciede2000_merge_thresh=8.0,
-        use_thin_cleanup=True,
-        min_region_width=5,
-        use_shared_borders=True,
-        label_mode="polylabel",
-        use_bezier_smooth=False,
-        use_content_protect=False,
-        subject_priority=2.0,
-        material_weight=0.5,
-        edge_influence=0.3,
-        use_auto_albedo=False,
-        use_painterly_preprocess=False,
-        painterly_sigma_s=60.0,
-        painterly_sigma_r=0.45,
-        normals=None,
-        normal_strength=0.4,
-        segmentation_format="auto",
-    ):
-        use_auto_mask = False
-        # Apply presets
-        if preset != "custom":
-            if preset == "fast":
-                use_slic = False
-                use_ciede2000 = True
-                use_palette_merge = True
-                use_bezier_smooth = False
-            elif preset == "balanced":
-                use_slic = True
-                use_ciede2000 = True
-                use_palette_merge = True
-                use_thin_cleanup = True
-                use_shared_borders = True
-                use_bezier_smooth = False
-                use_content_protect = False
-            elif preset == "portrait":
-                use_slic = True
-                use_ciede2000 = True
-                use_palette_merge = True
-                use_thin_cleanup = True
-                use_shared_borders = True
-                use_bezier_smooth = False
-                use_content_protect = True
-                use_auto_mask = True
-                # Portraits benefit greatly from shadow removal
-                if albedo is None:
-                    use_auto_albedo = True
-            else:
-                raise ValueError(f"Unknown preset: {preset}")
+    def execute(cls, **kwargs):
+        # 1. Resolve Presets
+        params = cls._resolve_presets(kwargs)
 
-        # Convert torch tensors to numpy BGR for perception inputs
-        def torch_to_bgr(t):
-            if t is None:
-                return None
-            # [B, H, W, C] -> [H, W, C] (take first in batch)
-            img_np = (t[0].cpu().numpy() * 255).astype(np.uint8)
-            if len(img_np.shape) == 2:  # Grayscale
-                return cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
-            return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        # 2. Extract perception inputs from tensors
+        perception = cls._prepare_perception_inputs(kwargs, params)
 
-        albedo_np = torch_to_bgr(albedo)
-        segmentation_np = None
-        if segmentation is not None:
-            seg_arr = (segmentation[0].cpu().numpy() * 255).astype(np.uint8)
-            fmt = segmentation_format
-            if fmt == "auto":
-                fmt = "grayscale" if seg_arr.ndim == 2 or seg_arr.shape[-1] == 1 else "rgb_packed"
-            if fmt == "grayscale":
-                segmentation_np = seg_arr[:, :, 0] if seg_arr.ndim == 3 else seg_arr
-                segmentation_np = segmentation_np.astype(np.int32)
-            else:  # rgb_packed
-                segmentation_np = (
-                    seg_arr[:, :, 0].astype(np.uint32) * 65536
-                    + seg_arr[:, :, 1].astype(np.uint32) * 256
-                    + seg_arr[:, :, 2].astype(np.uint32)
-                )
-
-        # Decode normals: RGB [0,255] → float XYZ [-1, 1]
-        normals_np = None
-        if normals is not None:
-            arr = normals[0].cpu().numpy()  # [H, W, 3] float32 in [0,1]
-            normals_np = arr * 2.0 - 1.0  # remap to [-1, 1]
-            # Normalize each vector to unit length
-            norms = np.linalg.norm(normals_np, axis=2, keepdims=True).clip(min=1e-6)
-            normals_np = normals_np / norms  # [H, W, 3] float32, unit vectors
-
-        lineart_np = None
-        if lineart is not None:
-            arr = lineart[0].cpu().numpy()  # [H, W, C] float32
-            if arr.ndim == 3:
-                arr = np.mean(arr, axis=2)  # RGB → grayscale
-            lineart_np = arr.astype(np.float32)
-            # Normalize to [0,1]
-            vmin, vmax = lineart_np.min(), lineart_np.max()
-            if vmax - vmin > 1e-6:
-                lineart_np = (lineart_np - vmin) / (vmax - vmin)
-            if invert_lineart:
-                lineart_np = 1.0 - lineart_np
-
-        has_perception = (
-            any(x is not None for x in [albedo_np, segmentation_np, normals_np, lineart_np])
-            or use_auto_mask
-        )
-
-        perception = None
-        if has_perception:
-            perception = PerceptionInputs(
-                albedo=albedo_np,
-                segmentation_mask=segmentation_np,
-                normal_map=normals_np,
-                normal_strength=normal_strength,
-                lineart=lineart_np,
-                lineart_strength=lineart_strength,
-                invert_lineart=invert_lineart,
-                subject_priority=subject_priority,
-                material_weight=material_weight,
-                edge_influence=edge_influence,
-                use_auto_mask=use_auto_mask,
-            )
-
-        # image is [B, H, W, C] RGB float32
+        # 3. Setup batch processing
+        image = kwargs["image"]
         batch_size = image.shape[0]
         result_images = []
         svg_contents = []
@@ -496,47 +407,48 @@ class PaintByNumberNode(io.ComfyNode):
         processor = ImageProcessor()
         renderer = PBNRenderer()
 
-        params = ProcessingParameters(
+        num_colors = params.get("num_colors", 0)
+        proc_params = ProcessingParameters(
             num_colors=num_colors if num_colors > 0 else None,
-            simplification=simplification,
-            use_watershed=use_watershed,
-            use_slic=use_slic,
-            use_ciede2000=use_ciede2000,
-            use_palette_merge=use_palette_merge,
-            ciede2000_merge_thresh=ciede2000_merge_thresh,
-            use_thin_cleanup=use_thin_cleanup,
-            min_region_width=min_region_width,
-            use_shared_borders=use_shared_borders,
-            label_mode=label_mode,
-            use_bezier_smooth=use_bezier_smooth,
-            use_content_protect=use_content_protect,
+            simplification=params.get("simplification", 1.0),
+            use_watershed=params.get("use_watershed", False),
+            use_slic=params.get("use_slic", True),
+            use_ciede2000=params.get("use_ciede2000", True),
+            use_palette_merge=params.get("use_palette_merge", True),
+            ciede2000_merge_thresh=params.get("ciede2000_merge_thresh", 10.0),
+            use_thin_cleanup=params.get("use_thin_cleanup", True),
+            min_region_width=params.get("min_region_width", 5),
+            use_shared_borders=params.get("use_shared_borders", True),
+            label_mode=params.get("label_mode", "polylabel"),
+            use_bezier_smooth=params.get("use_bezier_smooth", False),
+            use_content_protect=params.get("use_content_protect", False),
             perception=perception,
-            preset=preset,
-            output_mode=output_mode,
-            use_auto_albedo=use_auto_albedo,
-            use_painterly_preprocess=use_painterly_preprocess,
-            painterly_sigma_s=painterly_sigma_s,
-            painterly_sigma_r=painterly_sigma_r,
-            slic_n_segments=500,  # Default values (not yet in schema)
+            preset=params.get("preset", "balanced"),
+            output_mode=params.get("output_mode", "colored"),
+            use_auto_albedo=params.get("use_auto_albedo", False),
+            use_painterly_preprocess=params.get("use_painterly_preprocess", False),
+            painterly_sigma_s=params.get("painterly_sigma_s", 60.0),
+            painterly_sigma_r=params.get("painterly_sigma_r", 0.45),
+            slic_n_segments=500,
             slic_compactness=10.0,
         )
 
+        # 4. Batch loop
         for i in range(batch_size):
-            # Report which image we are processing if batch_size > 1
             if batch_size > 1:
                 logger.info(f"Processing image {i + 1}/{batch_size}")
 
             img_tensor = image[i]
-            h, w, c = img_tensor.shape
+            h, w, _ = img_tensor.shape
 
-            # Convert torch tensor to OpenCV BGR
-            img_np = (img_tensor.cpu().numpy() * 255).astype(np.uint8)
-            img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            # Convert to OpenCV BGR
+            img_bgr = cls._torch_to_bgr(img_tensor)
 
-            # Process image with progress reporting
-            result = processor.process_array(img_bgr, params, api=api)
+            # Process
+            result = processor.process_array(img_bgr, proc_params, api=api)
 
-            # Render result
+            # Render
+            output_mode = params.get("output_mode", "colored")
             if output_mode == "quantized":
                 result_bgr = result.quantized
             else:
@@ -550,7 +462,7 @@ class PaintByNumberNode(io.ComfyNode):
                     region_colors=result.region_colors,
                 )
 
-            # Convert back to torch tensor [H, W, 3] RGB float32
+            # Convert back to torch RGB
             result_rgb = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2RGB)
             result_tensor = torch.from_numpy(result_rgb.astype(np.float32) / 255.0)
 
@@ -558,33 +470,141 @@ class PaintByNumberNode(io.ComfyNode):
             svg_contents.append(result.svg_content)
             color_counts.append(result.color_palette.color_count)
 
-        # Stack results back into [B, H, W, 3]
+        # 5. Finalize outputs
         final_image = torch.stack(result_images, dim=0)
+        svg_results = cls._save_svg_batch(svg_contents)
 
-        # Save SVGs to temp directory using content hash to prevent accumulation
-        svg_results = []
-        temp_dir = folder_paths.get_temp_directory()
-
-        for svg_content in svg_contents:
-            # Use MD5 hash of content for deterministic filenames
-            content_hash = hashlib.md5(svg_content.encode("utf-8")).hexdigest()[:16]
-            svg_filename = f"pbn_{content_hash}.svg"
-            filepath = os.path.join(temp_dir, svg_filename)
-
-            # Note: Non-atomic check is acceptable here as writes are idempotent
-            if not os.path.exists(filepath):
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(svg_content)
-
-            svg_results.append({"filename": svg_filename, "subfolder": "", "type": "temp"})
-
-        # Prepare UI output with both pixel preview and SVG references
         pixel_preview = ui.PreviewImage(final_image, cls=cls)
         ui_output = {
-            "images": pixel_preview.values,  # Verified attribute for V3 PreviewImage
+            "images": pixel_preview.values,
             "pbn_svg": svg_results,
         }
 
-        # Note: The 'SVG' output pin only returns the first SVG in the batch,
-        # but the UI preview shows all generated vector graphics.
         return io.NodeOutput(final_image, svg_contents[0], color_counts[0], ui=ui_output)
+
+    @staticmethod
+    def _resolve_presets(kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Resolves preset overrides into a final parameter dictionary."""
+        params = kwargs.copy()
+        preset = kwargs.get("preset", "balanced")
+
+        if preset != "custom" and preset in PRESETS:
+            overrides = PRESETS[preset]
+            params.update(overrides)
+
+            # Special case for portrait auto-albedo
+            if preset == "portrait" and kwargs.get("albedo") is None:
+                params["use_auto_albedo"] = True
+
+        return params
+
+    @classmethod
+    def _prepare_perception_inputs(
+        cls, kwargs: dict[str, Any], params: dict[str, Any]
+    ) -> PerceptionInputs | None:
+        """Decodes various input tensors into the PerceptionInputs structure."""
+        albedo_np = cls._torch_to_bgr(kwargs.get("albedo"))
+        normals_np = cls._decode_normals(kwargs.get("normals"))
+        lineart_np = cls._decode_lineart(kwargs.get("lineart"), kwargs.get("invert_lineart", False))
+        segmentation_np = cls._decode_segmentation(
+            kwargs.get("segmentation"), kwargs.get("segmentation_format", "auto")
+        )
+
+        use_auto_mask = params.get("use_auto_mask", False)
+
+        has_perception = (
+            any(x is not None for x in [albedo_np, segmentation_np, normals_np, lineart_np])
+            or use_auto_mask
+        )
+
+        if not has_perception:
+            return None
+
+        return PerceptionInputs(
+            albedo=albedo_np,
+            segmentation_mask=segmentation_np,
+            normal_map=normals_np,
+            normal_strength=kwargs.get("normal_strength", 0.4),
+            lineart=lineart_np,
+            lineart_strength=kwargs.get("lineart_strength", 0.7),
+            invert_lineart=kwargs.get("invert_lineart", False),
+            subject_priority=kwargs.get("subject_priority", 2.0),
+            material_weight=kwargs.get("material_weight", 0.5),
+            edge_influence=kwargs.get("edge_influence", 0.3),
+            use_auto_mask=use_auto_mask,
+        )
+
+    @staticmethod
+    def _torch_to_bgr(t: torch.Tensor | None) -> np.ndarray | None:
+        """Converts [H,W,C] or [1,H,W,C] torch RGB float32 to BGR uint8."""
+        if t is None:
+            return None
+        # Handle both single image and batch-of-1
+        arr = t[0] if t.ndim == 4 else t
+        img_np = (arr.cpu().numpy() * 255).astype(np.uint8)
+        if img_np.ndim == 2:
+            return cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
+        return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+    @staticmethod
+    def _decode_normals(t: torch.Tensor | None) -> np.ndarray | None:
+        """Decodes Normal map tensor to [-1, 1] unit vectors."""
+        if t is None:
+            return None
+        arr = t[0].cpu().numpy()
+        normals = arr * 2.0 - 1.0
+        norms = np.linalg.norm(normals, axis=2, keepdims=True).clip(min=1e-6)
+        return normals / norms
+
+    @staticmethod
+    def _decode_lineart(t: torch.Tensor | None, invert: bool) -> np.ndarray | None:
+        """Decodes Lineart map tensor to [0, 1] grayscale float32."""
+        if t is None:
+            return None
+        arr = t[0].cpu().numpy()
+        if arr.ndim == 3:
+            arr = np.mean(arr, axis=2)
+        lineart = arr.astype(np.float32)
+        vmin, vmax = lineart.min(), lineart.max()
+        if vmax - vmin > 1e-6:
+            lineart = (lineart - vmin) / (vmax - vmin)
+        return 1.0 - lineart if invert else lineart
+
+    @staticmethod
+    def _decode_segmentation(t: torch.Tensor | None, fmt: str) -> np.ndarray | None:
+        """Decodes Segmentation map tensor based on format."""
+        if t is None:
+            return None
+        seg_arr = (t[0].cpu().numpy() * 255).astype(np.uint8)
+        if fmt == "auto":
+            fmt = "grayscale" if seg_arr.ndim == 2 or seg_arr.shape[-1] == 1 else "rgb_packed"
+
+        if fmt == "grayscale":
+            res = seg_arr[:, :, 0] if seg_arr.ndim == 3 else seg_arr
+            return res.astype(np.int32)
+
+        # rgb_packed
+        return (
+            seg_arr[:, :, 0].astype(np.uint32) * 65536
+            + seg_arr[:, :, 1].astype(np.uint32) * 256
+            + seg_arr[:, :, 2].astype(np.uint32)
+        )
+
+    @staticmethod
+    def _save_svg_batch(svg_contents: list[str]) -> list[dict[str, str]]:
+        """Saves SVGs to temp directory using content-addressed hashing."""
+        svg_results = []
+        temp_dir = folder_paths.get_temp_directory()
+
+        for content in svg_contents:
+            content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()[:16]
+            filename = f"pbn_{content_hash}.svg"
+            filepath = os.path.join(temp_dir, filename)
+
+            # Unconditionally write to avoid race conditions, as writes are idempotent
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            svg_results.append({"filename": filename, "subfolder": "", "type": "temp"})
+
+        return svg_results
