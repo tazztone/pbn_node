@@ -29,25 +29,28 @@ def multiscale_retinex(
     # Avoid log(0)
     l_channel = np.maximum(l_channel, 1.0)
 
-    retinex = np.zeros_like(l_channel)
+    retinex_log = np.zeros_like(l_channel)
     for sigma in scales:
         # Gaussian filter with sigma
         blur = gaussian_filter(l_channel, sigma=sigma)
         blur = np.maximum(blur, 1.0)
-        retinex += np.log(l_channel) - np.log(blur)
+        retinex_log += np.log(l_channel) - np.log(blur)
 
-    retinex /= len(scales)
+    retinex_log /= len(scales)
 
-    # Normalize to [0, 255] using percentiles to be robust against outliers
-    low, high = np.percentile(retinex, [1, 99])
-    if high > low:
-        retinex = np.clip(retinex, low, high)
-        retinex = (retinex - low) / (high - low) * 255.0
-    else:
-        retinex = np.full_like(retinex, 128.0)
+    # Convert from log-albedo back to linear albedo (R = I / L)
+    albedo_lin = np.exp(retinex_log)
 
-    lab[:, :, 0] = retinex
-    # Clamp chrominance channels to valid range [0, 255] before uint8 cast
+    # Restore original global mean luminance to maintain image brightness
+    target_mean = np.mean(l_channel)
+    current_mean = np.mean(albedo_lin)
+    if current_mean > 1e-6:
+        albedo_lin *= target_mean / current_mean
+
+    # Clamp to valid L range [0, 255]
+    lab[:, :, 0] = np.clip(albedo_lin, 0, 255)
+
+    # Preserve chrominance channels (already in lab[:, :, 1:])
     lab[:, :, 1:] = np.clip(lab[:, :, 1:], 0, 255)
     result = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
     return result
