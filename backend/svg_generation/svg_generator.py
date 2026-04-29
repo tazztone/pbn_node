@@ -69,15 +69,17 @@ class SVGGenerator:
         grouped_paths = self.group_paths_by_color(regions, colors, region_colors)
 
         # Generate paths for each color group
+
         for color_hex, region_ids in grouped_paths.items():
             fill_color = "#ffffff" if print_mode else color_hex
 
-            # If using shared borders, we don't need strokes on the fills unless it's print mode?
-            # Actually, in print mode, if use_shared_borders is true, we still draw strokes in
-            # the shared borders step. So fill stroke can be none.
-            fill_stroke = (
-                "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
-            )
+            if print_mode:
+                fill_stroke = (
+                    "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
+                )
+            else:
+                fill_stroke = color_hex  # Same as fill to prevent anti-aliasing gaps
+
             stroke_width_attr = (
                 "" if fill_stroke == "none" else f' stroke-width="{self.default_stroke_width}"'
             )
@@ -94,8 +96,8 @@ class SVGGenerator:
 
             svg_parts.append("  </g>\n")
 
-        # Add shared borders if enabled
-        if use_shared_borders and shared_borders:
+        # Add shared borders if enabled (only in print mode to avoid black lines on colored SVG)
+        if use_shared_borders and shared_borders and print_mode:
             svg_parts.append(f'  <g fill="none" stroke="{self.default_stroke_color}" ')
             svg_parts.append(f'stroke-width="{self.default_stroke_width}">\n')
 
@@ -134,11 +136,24 @@ class SVGGenerator:
 
                 # Use color index + 1 as the label text
                 label_text = str(region_id)
+                text_color = self.default_stroke_color
+
                 if region_colors and region_id in region_colors:
-                    label_text = str(region_colors[region_id] + 1)
+                    color_idx = region_colors[region_id]
+                    label_text = str(color_idx + 1)
+
+                    # For colored mode, ensure text is readable against the background
+                    if not print_mode:
+                        hex_color = colors.hex_colors[color_idx]
+                        h = hex_color.lstrip("#")
+                        rgb = [int(h[i : i + 2], 16) for i in (0, 2, 4)]
+                        # Relative luminance: 0.299R + 0.587G + 0.114B
+                        luminance = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+                        text_color = "#ffffff" if luminance < 128 else "#000000"
 
                 svg_parts.append(f'    <text x="{x:.{self.coordinate_precision}f}" ')
                 svg_parts.append(f'y="{y:.{self.coordinate_precision}f}" ')
+                svg_parts.append(f'fill="{text_color}" ')
                 svg_parts.append(f'font-size="{font_size}">{label_text}</text>\n')
 
         svg_parts.append("  </g>\n")

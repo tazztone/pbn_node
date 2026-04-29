@@ -28,7 +28,7 @@ class TestPaintByNumberNode:
             # Check output structure
             assert hasattr(output, "ui")
             assert "pbn_svg" in output.ui
-            assert "images" in output.ui
+            assert "images" not in output.ui
 
             # Check SVG references
             svg_refs = output.ui["pbn_svg"]

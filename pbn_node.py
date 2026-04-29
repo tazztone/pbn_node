@@ -7,7 +7,7 @@ import cv2
 import folder_paths
 import numpy as np
 import torch
-from comfy_api.latest import ComfyAPISync, io, ui
+from comfy_api.latest import ComfyAPISync, io
 
 from .backend.models import PerceptionInputs, ProcessingParameters
 from .pbn_pipeline import ImageProcessor
@@ -540,9 +540,7 @@ class PaintByNumberNode(io.ComfyNode):
         final_image = torch.stack(result_images, dim=0)
         svg_results = cls._save_svg_batch(svg_contents)
 
-        pixel_preview = ui.PreviewImage(final_image, cls=cls)
         ui_output = {
-            "images": pixel_preview.values,
             "pbn_svg": svg_results,
         }
 

@@ -17,28 +17,36 @@ app.registerExtension({
       nodeType.prototype.onNodeCreated = function () {
         onNodeCreated?.apply(this, arguments);
 
-        // Create a scrollable container for the SVG(s)
+        // Create a container for the SVG
         const container = document.createElement("div");
         container.classList.add("pbn-svg-preview-container");
         container.style.width = "100%";
-        container.style.maxHeight = "500px";
-        container.style.overflowY = "auto";
+        container.style.height = "100%";
         container.style.background = "#ffffff";
         container.style.borderRadius = "4px";
         container.style.marginTop = "8px";
         container.style.display = "none"; // Hidden until first execution
-        container.style.border = "1px solid #444";
+        container.style.overflow = "hidden"; // Prevent scrollbars
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
 
         this.pbn_svg_container = container;
 
         // Add as a DOM widget so it moves with the node
-        this.addDOMWidget("pbn_svg_preview", "custom", container, {
+        const widget = this.addDOMWidget("pbn_svg_preview", "custom", container, {
           serialize: false,
           getValue() {
             return "";
           },
           setValue(v) {},
         });
+
+        // Set up computeSize so the node knows how tall the widget is
+        widget.computeSize = function (width) {
+          return [width, this.computedHeight || 300];
+        };
+
+        this.pbn_svg_widget = widget;
       };
 
       // 2. Hook onExecuted to update the preview with new SVG data
@@ -48,7 +56,7 @@ app.registerExtension({
 
         if (message?.pbn_svg && Array.isArray(message.pbn_svg) && message.pbn_svg.length > 0) {
           // Show container and clear previous previews
-          this.pbn_svg_container.style.display = "block";
+          this.pbn_svg_container.style.display = "flex";
           this.pbn_svg_container.innerHTML = "";
 
           message.pbn_svg.forEach((svg) => {
@@ -65,15 +73,30 @@ app.registerExtension({
             // api.api_base is the base URL for the ComfyUI server
             img.src = api.api_base + "/view?" + params.toString();
             img.style.width = "100%";
-            img.style.height = "auto";
+            img.style.height = "100%";
+            img.style.objectFit = "contain";
             img.style.display = "block";
-            img.style.padding = "4px";
             img.alt = "PBN SVG Preview";
+
+            // When image loads, adjust the node size to match aspect ratio
+            img.onload = () => {
+              const aspect = img.naturalHeight / img.naturalWidth;
+              const width = this.size[0];
+              const imgHeight = width * aspect;
+
+              // Store calculated height on widget for computeSize
+              this.pbn_svg_widget.computedHeight = imgHeight;
+
+              // Recalculate node size based on widget content
+              const size = this.computeSize([this.size[0], this.size[1]]);
+              this.setSize([this.size[0], size[1]]);
+              this.setDirtyCanvas(true, true);
+            };
 
             this.pbn_svg_container.appendChild(img);
           });
 
-          // Trigger a canvas redraw to update the node height
+          // Trigger initial canvas redraw
           this.setDirtyCanvas(true, true);
         }
       };
