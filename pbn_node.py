@@ -480,7 +480,7 @@ class PaintByNumberNode(io.ComfyNode):
             "pbn_svg": svg_results,
         }
 
-        return io.NodeOutput(final_image, svg_contents[0], color_counts[0], ui=ui_output)
+        return io.NodeOutput(final_image, svg_contents, color_counts, ui=ui_output)
 
     @staticmethod
     def _resolve_presets(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -601,9 +601,10 @@ class PaintByNumberNode(io.ComfyNode):
             filename = f"pbn_{content_hash}.svg"
             filepath = os.path.join(temp_dir, filename)
 
-            # Unconditionally write to avoid race conditions, as writes are idempotent
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
+            # Only write if file doesn't exist to avoid redundant I/O
+            if not os.path.exists(filepath):
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
 
             svg_results.append({"filename": filename, "subfolder": "", "type": "temp"})
 

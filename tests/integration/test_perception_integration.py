@@ -65,4 +65,4 @@ class TestPerceptionIntegration:
         )
 
         assert output is not None
-        assert output[2] > 0  # color_count
+        assert output[2][0] > 0  # color_count

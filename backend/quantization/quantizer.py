@@ -9,6 +9,7 @@ from kneed import KneeLocator
 from sklearn.cluster import KMeans
 
 from ..models import ColorPalette, PerceptionInputs
+from ..utils.color import cv_to_std_lab
 
 
 class ColorQuantizer:
@@ -123,7 +124,6 @@ class ColorQuantizer:
         """
         Perform quantization with semantic budget allocation.
         """
-        from ..utils.color import cv_to_std_lab
 
         if background_ids is None:
             background_ids = [0]
@@ -324,8 +324,6 @@ class ColorQuantizer:
         # Perceptual palette merge
         final_k = k
         if self.use_palette_merge and len(centers_lab) > 1:
-            from ..utils.color import cv_to_std_lab
-
             target_k = num_colors if num_colors is not None else 0
             current_thresh = self.ciede2000_merge_thresh
 
