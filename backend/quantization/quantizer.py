@@ -322,7 +322,6 @@ class ColorQuantizer:
         )
 
         # Perceptual palette merge
-        final_k = k
         if self.use_palette_merge and len(centers_lab) > 1:
             target_k = num_colors if num_colors is not None else 0
             current_thresh = self.ciede2000_merge_thresh
@@ -381,10 +380,6 @@ class ColorQuantizer:
             labels = np.argmin(dists, axis=1)
             quantized_lab = centers_lab[labels].reshape(h, w, 3).astype(np.uint8)
             quantized_image = cv2.cvtColor(quantized_lab, cv2.COLOR_LAB2BGR)
-            final_k = len(centers_lab)
 
         palette = self._centers_to_palette(centers_lab)
-        # Update color count explicitly if needed
-        palette.color_count = final_k
-
         return quantized_image, palette

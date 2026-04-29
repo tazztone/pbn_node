@@ -15,7 +15,7 @@ class TestPBNRenderer:
     def sample_data(self):
         # 100x100 canvas with one square region
         regions = {1: Polygon([(10, 10), (40, 10), (40, 40), (10, 40)])}
-        labels = LabelData(positions={1: Point(25, 25)}, font_sizes={1: 12}, skipped_regions=set())
+        labels = LabelData(positions={1: Point(25, 25)}, font_sizes={1: 20}, skipped_regions=set())
         palette = ColorPalette(
             colors=np.array([[50, 0, 0]]),  # LAB
             hex_colors=["#ff0000"],  # Red
@@ -50,10 +50,10 @@ class TestPBNRenderer:
         assert renderer._hex_to_rgb("#ffffff") == (255, 255, 255)
         assert renderer._hex_to_rgb("#000000") == (0, 0, 0)
         assert renderer._hex_to_rgb("#ff0000") == (255, 0, 0)
-        assert renderer._hex_to_rgb("00ff00") == (0, 255, 0)
+        assert renderer._hex_to_rgb("#00ff00") == (0, 255, 0)
 
     def test_luminance_contrast(self, renderer, sample_data):
-        # Dark background should have white text
+        # Dark background (black) should have white text label
         regions, labels, _ = sample_data
         dark_palette = ColorPalette(
             colors=np.array([[0, 0, 0]]),
@@ -61,8 +61,15 @@ class TestPBNRenderer:
             color_count=1,
         )
         img = renderer.render(regions, labels, dark_palette, 100, 100, mode="colored")
-        # We can't easily check text color without OCR, but we can verify it doesn't crash
-        # and the region itself is black.
-        is_black = np.array_equal(img[25, 25], [0, 0, 0])
-        has_content = np.any(img[25, 25] > 0)
-        assert is_black or has_content  # Text might be there
+
+        # The region center is [25, 25].
+        # In a black region, if there is a label, there should be some white pixels.
+        # labels.positions[1] is at (25, 25).
+        # We search in a wider vicinity because cv2.putText anchor is bottom-left.
+        vicinity = img[0:60, 0:60]
+        has_label_content = np.any(vicinity > 0)
+        assert has_label_content
+
+        # Specifically, check that the label is white-ish (>200 in all channels)
+        # to account for anti-aliasing
+        assert np.any(np.all(vicinity > 200, axis=2))

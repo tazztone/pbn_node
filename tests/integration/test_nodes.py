@@ -20,16 +20,15 @@ def test_pbn_node_execute(sample_image_tensor):
 
     # Verify outputs
     # io.NodeOutput is mocked as a tuple-like object in conftest
+    # io.NodeOutput is mocked as a tuple-like object in conftest
     image_out, svg_out, count_out = result
 
     assert isinstance(image_out, torch.Tensor)
     assert image_out.shape == sample_image_tensor.shape
-    assert isinstance(svg_out, list)
-    assert isinstance(svg_out[0], str)
-    assert "<svg" in svg_out[0]
-    assert isinstance(count_out, list)
-    assert isinstance(count_out[0], int)
-    assert count_out[0] > 0
+    assert isinstance(svg_out, str)
+    assert "<svg" in svg_out
+    assert isinstance(count_out, int)
+    assert count_out > 0
 
 
 @pytest.mark.integration

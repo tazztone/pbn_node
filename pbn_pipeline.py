@@ -74,6 +74,8 @@ class ImageProcessor:
 
             # Stage 2: Content Protection & Perception
             logger.info("Stage 2/6: Analyzing image perception")
+            if api:
+                api.execution.set_progress(1, 6)
             perception = p.perception
             lineart_map = perception.lineart if perception else None
             lineart_strength = perception.lineart_strength if perception else 0.0
@@ -128,7 +130,7 @@ class ImageProcessor:
             # Stage 3: Color Quantization
             logger.info("Stage 3/6: Quantizing image colors")
             if api:
-                api.execution.set_progress(2, 6)
+                api.execution.set_progress(3, 6)
 
             # Update quantizer state
             self.quantizer.use_palette_merge = p.use_palette_merge
@@ -154,7 +156,7 @@ class ImageProcessor:
             # Stage 4: Region Segmentation
             logger.info("Stage 4/6: Segmenting regions")
             if api:
-                api.execution.set_progress(3, 6)
+                api.execution.set_progress(4, 6)
 
             segmenter = RegionSegmenter(
                 use_watershed=p.use_watershed,
@@ -169,7 +171,7 @@ class ImageProcessor:
             # Stage 5: Vectorization
             logger.info("Stage 5/6: Vectorizing regions")
             if api:
-                api.execution.set_progress(4, 6)
+                api.execution.set_progress(5, 6)
 
             vectorizer = Vectorizer(use_bezier_smooth=p.use_bezier_smooth)
             vectorized_regions = vectorizer.vectorize(region_data, p.simplification)
@@ -190,7 +192,7 @@ class ImageProcessor:
             # Stage 6: Label Placement & SVG Generation
             logger.info("Stage 6/6: Finalizing template")
             if api:
-                api.execution.set_progress(5, 6)
+                api.execution.set_progress(6, 6)
 
             label_placer = LabelPlacer(label_mode=p.label_mode, lineart=lineart_map)
             label_data = label_placer.place_labels(cleaned_regions)

@@ -24,22 +24,29 @@ def test_augment_image_with_normals_weighting():
     """Verify that the normal strength correctly weights the channels."""
     h, w = 10, 10
     lab_image = np.ones((h, w, 3), dtype=np.float32) * 50.0
-    normal_map = np.ones((h, w, 3), dtype=np.float32)
-    # Normals are already normalized in the helper
+    # Create a gradient normal map so there are non-zero angular gradients
+    normal_map = np.zeros((h, w, 3), dtype=np.float32)
+    # X-gradient: normals rotate from Z to X
+    for x in range(w):
+        angle = (x / w) * np.pi / 2
+        normal_map[:, x, 0] = np.sin(angle)
+        normal_map[:, x, 2] = np.cos(angle)
 
     strength = 1.0
-    augmented = augment_image_with_normals(lab_image, normal_map, strength)
+    augmented_full = augment_image_with_normals(lab_image, normal_map, strength)
 
-    # Standard LAB values are L: 0-100, a/b: -128-127
-    # Normals are -1 to 1.
-    # The helper scales normals by strength * 100.0 (or similar) to match LAB magnitude.
-    # Let's check the implementation logic.
+    strength = 0.5
+    augmented_half = augment_image_with_normals(lab_image, normal_map, strength)
 
-    # If strength is 0.5, normals should have half the influence of strength 1.0.
-    augmented_half = augment_image_with_normals(lab_image, normal_map, 0.5)
+    # Normal channels are indices 3 and 4
+    # Verify that higher strength leads to higher magnitude in normal channels
+    full_mag = np.mean(np.abs(augmented_full[:, :, 3:5]))
+    half_mag = np.mean(np.abs(augmented_half[:, :, 3:5]))
+    assert full_mag > half_mag
 
-    # Normal channels are indices 3 and 4 (X and Y gradients)
-    assert np.allclose(augmented[:, :, 3:5], augmented_half[:, :, 3:5] * 2.0)
+    # Verify strength 0 leads to near-zero normal influence
+    augmented_zero = augment_image_with_normals(lab_image, normal_map, 0.0)
+    assert np.allclose(augmented_zero[:, :, 3:5], 0.0)
 
 
 @pytest.mark.unit

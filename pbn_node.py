@@ -41,7 +41,6 @@ PRESETS = {
         "use_shared_borders": True,
         "use_bezier_smooth": False,
         "use_content_protect": True,
-        "use_auto_mask": True,
     },
 }
 
@@ -389,15 +388,82 @@ class PaintByNumberNode(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, **kwargs):
+    def execute(
+        cls,
+        image,
+        num_colors=0,
+        simplification=1.0,
+        use_watershed=False,
+        output_mode="colored",
+        preset="balanced",
+        albedo=None,
+        segmentation=None,
+        lineart=None,
+        lineart_strength=0.7,
+        invert_lineart=False,
+        normals=None,
+        normal_strength=0.4,
+        segmentation_format="auto",
+        use_slic=True,
+        use_ciede2000=True,
+        use_palette_merge=True,
+        ciede2000_merge_thresh=10.0,
+        use_thin_cleanup=True,
+        min_region_width=5,
+        use_shared_borders=True,
+        label_mode="polylabel",
+        use_bezier_smooth=False,
+        use_content_protect=False,
+        subject_priority=2.0,
+        material_weight=0.5,
+        edge_influence=0.3,
+        use_auto_albedo=False,
+        use_auto_mask=False,
+        use_painterly_preprocess=False,
+        painterly_sigma_s=60.0,
+        painterly_sigma_r=0.45,
+    ):
         # 1. Resolve Presets
+        kwargs = {
+            "image": image,
+            "num_colors": num_colors,
+            "simplification": simplification,
+            "use_watershed": use_watershed,
+            "output_mode": output_mode,
+            "preset": preset,
+            "albedo": albedo,
+            "segmentation": segmentation,
+            "lineart": lineart,
+            "lineart_strength": lineart_strength,
+            "invert_lineart": invert_lineart,
+            "normals": normals,
+            "normal_strength": normal_strength,
+            "segmentation_format": segmentation_format,
+            "use_slic": use_slic,
+            "use_ciede2000": use_ciede2000,
+            "use_palette_merge": use_palette_merge,
+            "ciede2000_merge_thresh": ciede2000_merge_thresh,
+            "use_thin_cleanup": use_thin_cleanup,
+            "min_region_width": min_region_width,
+            "use_shared_borders": use_shared_borders,
+            "label_mode": label_mode,
+            "use_bezier_smooth": use_bezier_smooth,
+            "use_content_protect": use_content_protect,
+            "subject_priority": subject_priority,
+            "material_weight": material_weight,
+            "edge_influence": edge_influence,
+            "use_auto_albedo": use_auto_albedo,
+            "use_auto_mask": use_auto_mask,
+            "use_painterly_preprocess": use_painterly_preprocess,
+            "painterly_sigma_s": painterly_sigma_s,
+            "painterly_sigma_r": painterly_sigma_r,
+        }
         params = cls._resolve_presets(kwargs)
 
         # 2. Extract perception inputs from tensors
         perception = cls._prepare_perception_inputs(kwargs, params)
 
         # 3. Setup batch processing
-        image = kwargs["image"]
         batch_size = image.shape[0]
         result_images = []
         svg_contents = []
@@ -407,9 +473,9 @@ class PaintByNumberNode(io.ComfyNode):
         processor = ImageProcessor()
         renderer = PBNRenderer()
 
-        num_colors = params.get("num_colors", 0)
+        n_colors_param = params.get("num_colors", 0)
         proc_params = ProcessingParameters(
-            num_colors=num_colors if num_colors > 0 else None,
+            num_colors=n_colors_param if n_colors_param > 0 else None,
             simplification=params.get("simplification", 1.0),
             use_watershed=params.get("use_watershed", False),
             use_slic=params.get("use_slic", True),
@@ -480,7 +546,7 @@ class PaintByNumberNode(io.ComfyNode):
             "pbn_svg": svg_results,
         }
 
-        return io.NodeOutput(final_image, svg_contents, color_counts, ui=ui_output)
+        return io.NodeOutput(final_image, svg_contents[0], color_counts[0], ui=ui_output)
 
     @staticmethod
     def _resolve_presets(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -492,9 +558,12 @@ class PaintByNumberNode(io.ComfyNode):
             overrides = PRESETS[preset]
             params.update(overrides)
 
-            # Special case for portrait auto-albedo
-            if preset == "portrait" and kwargs.get("albedo") is None:
-                params["use_auto_albedo"] = True
+            # Special case for portrait auto-albedo and mask
+            if preset == "portrait":
+                if kwargs.get("albedo") is None:
+                    params["use_auto_albedo"] = True
+                if kwargs.get("segmentation") is None:
+                    params["use_auto_mask"] = True
 
         return params
 
