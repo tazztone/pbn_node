@@ -1,9 +1,8 @@
 # ComfyUI paint by number
 
-ComfyUI paint by number is a custom node for ComfyUI that transforms your
-digital images into high-quality, printable paint-by-number templates. It lets
-you generate vector-aligned regions with accurate labels directly within your
-ComfyUI workflows.
+ComfyUI paint by number transforms your digital images into high-quality,
+printable paint-by-number templates. It lets you generate vector-aligned regions
+with accurate labels directly within your ComfyUI workflows.
 
 ## Features
 
@@ -27,6 +26,10 @@ results.
   normal maps to guide color quantization and boundary detection.
 - **Auto-albedo:** Integrated Retinex-based shadow removal to estimate clean
   material colors when external maps are missing.
+- **Normal-Map-Guided SLIC:** Leverages 3D surface geometry to ensure region
+  boundaries follow physical creases and anatomical features.
+- **Sapiens Adaptive Priority:** Automatically prioritizes faces, hands, and
+  subject regions for higher detail preservation.
 
 ## Installation
 
@@ -80,6 +83,14 @@ The node accepts several configuration parameters to fine-tune the result.
   segments when using a segmentation mask.
 - **material_weight:** Controls the influence of the albedo map over the
   original photo during quantization.
+- **edge_influence:** Controls how much the lineart edge map biases color
+  quantization. High values ensure color boundaries follow edges.
+- **normals:** Optional surface normal map (from Sapiens or Depth-to-Normal).
+  Causes superpixel boundaries to align with 3D surface creases even when
+  colors are similar.
+- **normal_strength:** How strongly the normal map influences superpixel shapes.
+- **segmentation_format:** How to interpret the segmentation map (`auto`,
+  `grayscale`, or `rgb_packed`).
 - **use_auto_albedo:** When enabled, automatically estimates a shadow-free
   albedo map if no external albedo is provided.
 - **use_painterly_preprocess:** Applies a stylization filter before processing
@@ -164,7 +175,6 @@ Once you've installed the node, there are several ways to extend your workflow.
 
 For the full list of planned features and their implementation priority, see
 [ROADMAP.md](ROADMAP.md).
-
 
 ## License
 

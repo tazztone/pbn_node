@@ -4,28 +4,11 @@ Defines core data structures used throughout the processing pipeline.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Literal
 
 import networkx as nx
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
-
-
-@dataclass
-class ProcessingJob:
-    """Represents a single image processing job."""
-
-    job_id: str
-    status: str  # "processing" | "complete" | "failed"
-    input_path: str
-    output_svg: str | None = None
-    error_message: str | None = None
-    created_at: datetime | None = None
-
-    def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now()
 
 
 @dataclass
@@ -35,12 +18,13 @@ class PerceptionInputs:
     albedo: np.ndarray | None = None
     segmentation_mask: np.ndarray | None = None
     normal_map: np.ndarray | None = None
+    normal_strength: float = 0.4  # 0=off, 1=full influence
     lineart: np.ndarray | None = None  # [H,W] float32 [0,1] edge weight map
-    lineart_strength: float = 0.7
+    lineart_strength: float = 0.7  # segmentation boundary hardness [0,1]
     invert_lineart: bool = False
     background_ids: list[int] = field(default_factory=lambda: [0])
     subject_priority: float = 2.0
-    edge_influence: float = 0.3
+    edge_influence: float = 0.3  # quantizer: weight of lineart edges on albedo blend [0,1]
     material_weight: float = 0.5  # Blend factor between albedo and original photo
     use_auto_mask: bool = False  # Whether to generate an Otsu mask if segmentation_mask is None
 
@@ -53,6 +37,8 @@ class PerceptionInputs:
             raise ValueError("edge_influence must be between 0.0 and 1.0")
         if not (0.0 <= self.lineart_strength <= 1.0):
             raise ValueError("lineart_strength must be between 0.0 and 1.0")
+        if not (0.0 <= self.normal_strength <= 1.0):
+            raise ValueError("normal_strength must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -144,3 +130,6 @@ class SVGResult:
     processing_time: float
     region_count: int
     label_count: int
+    cleaned_regions: dict
+    label_data: "LabelData"
+    quantized: np.ndarray

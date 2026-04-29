@@ -337,20 +337,41 @@ class ColorQuantizer:
         """
         Complete quantization pipeline with optional perception-stack inputs.
         """
+        if perception and perception.albedo is not None and perception.edge_influence > 0:
+            # Blend original image with albedo weighted by (1 - edge_map * edge_influence)
+            # Pixels at strong edges keep more original color; flat areas lean on albedo
+            blend = perception.edge_influence
+            if perception.lineart is not None:
+                # edge_map dims [H,W] → [H,W,1] for broadcasting
+                weight_map = perception.lineart[..., np.newaxis] * blend
+                input_image = (
+                    image.astype(np.float32) * (1 - weight_map)
+                    + perception.albedo.astype(np.float32) * weight_map
+                )
+            else:
+                # No lineart, uniform blend
+                input_image = (
+                    image.astype(np.float32) * (1 - blend)
+                    + perception.albedo.astype(np.float32) * blend
+                )
+            input_image = np.clip(input_image, 0, 255).astype(np.uint8)
+        else:
+            input_image = image
+
         # Determine k
         if num_colors is None:
-            k = self.auto_select_k(image)
+            k = self.auto_select_k(input_image)
         else:
             k = max(self.min_k, num_colors)
 
         # Use budget splitting if a segmentation mask is provided or requested via auto_mask
         seg_mask = perception.segmentation_mask if perception else None
         if seg_mask is None and perception and perception.use_auto_mask:
-            seg_mask = self._get_otsu_mask(image)
+            seg_mask = self._get_otsu_mask(input_image)
 
         if seg_mask is not None and num_colors is not None and num_colors >= 4:
             return self.quantize_with_budget(
-                image,
+                input_image,
                 k,
                 seg_mask,
                 background_ids=perception.background_ids if perception else [0],
@@ -364,7 +385,7 @@ class ColorQuantizer:
         material_weight = perception.material_weight if perception else 0.5
 
         quantized_image, centers_lab = self.kmeans_lab(
-            image, k, albedo=albedo, material_weight=material_weight
+            input_image, k, albedo=albedo, material_weight=material_weight
         )
 
         # Post-KMeans perceptual palette merge
@@ -413,7 +434,7 @@ class ColorQuantizer:
                 centers_lab = np.vstack([centers_lab[mask], new_center[np.newaxis, :]])
 
             # Re-quantize the image with the merged centers
-            lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
+            lab_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2LAB).astype(np.float32)
             h, w = lab_image.shape[:2]
             pixels = lab_image.reshape(-1, 3)
 

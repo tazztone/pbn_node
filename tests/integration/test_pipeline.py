@@ -16,10 +16,11 @@ def test_image_processor_full_run(sample_image_np):
     assert result.region_count > 0
     assert result.processing_time > 0
 
-    # Check internal state storage for renderer
-    assert processor.last_palette is not None
-    assert processor.last_cleaned_regions is not None
-    assert processor.last_label_data is not None
+    # Check that all required data is in the result
+    assert result.color_palette is not None
+    assert result.cleaned_regions is not None
+    assert result.label_data is not None
+    assert result.quantized is not None
 
 
 @pytest.mark.integration

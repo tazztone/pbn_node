@@ -3,11 +3,19 @@ import logging
 import time
 
 import cv2
+import numpy as np
+import skimage.color
+import skimage.segmentation
 
+from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
 from .backend.preprocessing.preprocessor import Preprocessor
+from .backend.preprocessing.protector import Protector
+from .backend.preprocessing.retinex import multiscale_retinex
+from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
+from .backend.vectorization.vectorizer import Vectorizer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -55,8 +63,6 @@ class ImageProcessor:
             use_content_protect = params.use_content_protect
             protection_map = None
             if use_content_protect:
-                from .backend.preprocessing.protector import Protector
-
                 protector = Protector()
                 logger.info("Generating content protection map")
                 protection_map = protector.generate_protection_map(preprocessed)
@@ -64,38 +70,63 @@ class ImageProcessor:
             # Apply SLIC superpixels if enabled
             use_slic = params.use_slic
             if use_slic:
-                logger.info("Applying SLIC superpixels")
-                import numpy as np
-                import skimage.segmentation
+                perception = params.perception
+                normal_map = perception.normal_map if perception else None
+                normal_strength = perception.normal_strength if perception else 0.0
 
-                # convert to rgb for slic
-                rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
-                segments = skimage.segmentation.slic(
-                    rgb_image, n_segments=500, compactness=10, start_label=1
-                )
+                if normal_map is not None and normal_strength > 0:
+                    from .backend.preprocessing.normal_features import (
+                        augment_image_with_normals,
+                    )
 
-                # replace each pixel with its superpixel mean color using vectorized approach
+                    # Build 5-channel LAB + normal-feature image for SLIC
+                    lab_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2LAB).astype(np.float32)
+                    slic_input = augment_image_with_normals(lab_image, normal_map, normal_strength)
+                    # skimage.slic with channel_axis=-1, multichannel feature space
+                    segments = skimage.segmentation.slic(
+                        slic_input,
+                        n_segments=500,
+                        compactness=10,
+                        start_label=1,
+                        channel_axis=-1,  # treat last dim as features, not spatial
+                    )
+                else:
+                    # Standard RGB SLIC (existing behavior)
+                    rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
+                    segments = skimage.segmentation.slic(
+                        rgb_image, n_segments=500, compactness=10, start_label=1
+                    )
+
                 superpixel_img = skimage.color.label2rgb(
                     segments, preprocessed, kind="avg", bg_label=-1
-                )
-                # label2rgb returns float64 [0,1] or [0,255] depending on input,
-                # but with kind='avg' and uint8 input it should be consistent.
-                # To be safe, ensure uint8.
-                superpixel_img = (superpixel_img).astype(np.uint8)
-
+                ).astype(np.uint8)
                 input_for_quantization = superpixel_img
             else:
                 input_for_quantization = preprocessed
 
             # Make quantizer use protection map
-            from .backend.quantization.quantizer import ColorQuantizer
-
             quantizer = ColorQuantizer(
                 use_palette_merge=params.use_palette_merge,
                 ciede2000_merge_thresh=params.ciede2000_merge_thresh,
                 use_ciede2000=params.use_ciede2000,
             )
             quantizer.protection_map = protection_map
+
+            # Sapiens Body-Part Adaptive Priority
+            if (
+                params.perception is not None
+                and params.perception.segmentation_mask is not None
+                and params.perception.segmentation_mask.ndim == 2  # grayscale class map
+            ):
+                from .backend.preprocessing.sapiens_priority import build_priority_map
+
+                priority_map = build_priority_map(params.perception.segmentation_mask)
+                # Merge with any existing protection map
+                if protection_map is not None:
+                    protection_map = protection_map * priority_map
+                else:
+                    protection_map = priority_map
+                quantizer.protection_map = protection_map
 
             # stage metadata
             perception = params.perception
@@ -105,8 +136,6 @@ class ImageProcessor:
             # Auto-albedo: estimate albedo via MSR if no external albedo provided
             # This must run BEFORE quantization to influence the palette
             if params.use_auto_albedo and (perception is None or perception.albedo is None):
-                from .backend.preprocessing.retinex import multiscale_retinex
-
                 logger.info("Estimating auto-albedo via MSR Retinex")
                 auto_albedo = multiscale_retinex(input_for_quantization)
                 perception = (
@@ -145,7 +174,6 @@ class ImageProcessor:
             logger.info("Stage 4/6: Vectorizing regions")
             if api:
                 api.execution.set_progress(4, 6)
-            from .backend.vectorization.vectorizer import Vectorizer
 
             vectorizer = Vectorizer(use_bezier_smooth=params.use_bezier_smooth)
             vectorized_regions = vectorizer.vectorize(region_data, params.simplification)
@@ -168,7 +196,6 @@ class ImageProcessor:
             logger.info("Stage 5/6: Placing labels")
             if api:
                 api.execution.set_progress(5, 6)
-            from .backend.labeling.label_placer import LabelPlacer
 
             label_placer = LabelPlacer(label_mode=params.label_mode, lineart=lineart_map)
             label_data = label_placer.place_labels(cleaned_regions)
@@ -195,21 +222,16 @@ class ImageProcessor:
             processing_time = time.time() - start_time
 
             # Create result
-            result = SVGResult(
+            return SVGResult(
                 svg_content=svg_content,
                 color_palette=palette,
                 processing_time=processing_time,
                 region_count=len(cleaned_regions),
                 label_count=len(label_data.positions),
+                cleaned_regions=cleaned_regions,
+                label_data=label_data,
+                quantized=quantized,
             )
-
-            # Store internal data for renderer
-            self.last_cleaned_regions = cleaned_regions
-            self.last_label_data = label_data
-            self.last_palette = palette
-            self.last_quantized = quantized
-
-            return result
 
         except Exception as e:
             logger.error(f"Image processing failed: {str(e)}")

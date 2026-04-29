@@ -79,7 +79,29 @@ class PaintByNumberNode(io.ComfyNode):
                         "background (e.g., standard Canny)."
                     ),
                 ),
-                # io.Image.Input("normal", optional=True, tooltip="Optional normal map image."),
+                io.Image.Input(
+                    "normals",
+                    optional=True,
+                    tooltip=(
+                        "Optional surface normal map (from Sapiens or a Depth-to-Normal node). "
+                        "Causes superpixel boundaries to align with 3D surface creases (shoulder "
+                        "edges, facial structure) even when colors on both sides are similar. "
+                        "Expects a standard RGB normal map where R=X, G=Y, B=Z in [-1,1] range."
+                    ),
+                ),
+                io.Float.Input(
+                    "normal_strength",
+                    default=0.4,
+                    min=0.0,
+                    max=1.0,
+                    step=0.05,
+                    advanced=True,
+                    tooltip=(
+                        "(Advanced) How strongly the normal map influences superpixel shapes. "
+                        "0 = pure color-based SLIC; 1 = normals dominate shape. "
+                        "0.3–0.5 is a good starting range for portraits."
+                    ),
+                ),
                 io.Int.Input(
                     "num_colors",
                     default=0,
@@ -121,6 +143,16 @@ class PaintByNumberNode(io.ComfyNode):
                         "'colored': Template with colors and labels; 'outline': Line-art for "
                         "printing; 'quantized': Posterized test image; 'print_svg': "
                         "High-quality vector file for large printing."
+                    ),
+                ),
+                io.Combo.Input(
+                    "segmentation_format",
+                    options=["auto", "grayscale", "rgb_packed"],
+                    default="auto",
+                    tooltip=(
+                        "How to interpret the segmentation map. 'auto' tries to detect. "
+                        "'grayscale': single-channel 0–N class labels (SAM, Sapiens). "
+                        "'rgb_packed': RGB image where each unique color = one class."
                     ),
                 ),
                 # Phase 5 inputs
@@ -341,6 +373,9 @@ class PaintByNumberNode(io.ComfyNode):
         painterly_sigma_s=60.0,
         painterly_sigma_r=0.45,
         edge_influence=0.3,
+        normals=None,
+        normal_strength=0.4,
+        segmentation_format="auto",
     ):
         use_auto_mask = False
         # Apply presets
@@ -368,7 +403,8 @@ class PaintByNumberNode(io.ComfyNode):
                 use_content_protect = True
                 use_auto_mask = True
                 # Portraits benefit greatly from shadow removal
-                use_auto_albedo = True
+                if albedo is None:
+                    use_auto_albedo = True
             else:
                 raise ValueError(f"Unknown preset: {preset}")
 
@@ -385,18 +421,28 @@ class PaintByNumberNode(io.ComfyNode):
         albedo_np = torch_to_bgr(albedo)
         segmentation_np = None
         if segmentation is not None:
-            # For segmentation, we want the raw class labels if possible,
-            # but if it's an RGB image we'll use torch_to_bgr and then unique later.
-            segmentation_np = (segmentation[0].cpu().numpy() * 255).astype(np.uint8)
-            if len(segmentation_np.shape) == 3:
-                # Convert RGB to a 1D label map
+            seg_arr = (segmentation[0].cpu().numpy() * 255).astype(np.uint8)
+            fmt = segmentation_format
+            if fmt == "auto":
+                fmt = "grayscale" if seg_arr.ndim == 2 or seg_arr.shape[-1] == 1 else "rgb_packed"
+            if fmt == "grayscale":
+                segmentation_np = seg_arr[:, :, 0] if seg_arr.ndim == 3 else seg_arr
+                segmentation_np = segmentation_np.astype(np.int32)
+            else:  # rgb_packed
                 segmentation_np = (
-                    segmentation_np[:, :, 0].astype(np.uint32) * 65536
-                    + segmentation_np[:, :, 1].astype(np.uint32) * 256
-                    + segmentation_np[:, :, 2].astype(np.uint32)
+                    seg_arr[:, :, 0].astype(np.uint32) * 65536
+                    + seg_arr[:, :, 1].astype(np.uint32) * 256
+                    + seg_arr[:, :, 2].astype(np.uint32)
                 )
 
-        normal_np = torch_to_bgr(normal)
+        # Decode normals: RGB [0,255] → float XYZ [-1, 1]
+        normals_np = None
+        if normals is not None:
+            arr = normals[0].cpu().numpy()  # [H, W, 3] float32 in [0,1]
+            normals_np = arr * 2.0 - 1.0  # remap to [-1, 1]
+            # Normalize each vector to unit length
+            norms = np.linalg.norm(normals_np, axis=2, keepdims=True).clip(min=1e-6)
+            normals_np = normals_np / norms  # [H, W, 3] float32, unit vectors
 
         lineart_np = None
         if lineart is not None:
@@ -412,7 +458,7 @@ class PaintByNumberNode(io.ComfyNode):
                 lineart_np = 1.0 - lineart_np
 
         has_perception = (
-            any(x is not None for x in [albedo_np, segmentation_np, normal_np, lineart_np])
+            any(x is not None for x in [albedo_np, segmentation_np, normals_np, lineart_np])
             or use_auto_mask
         )
 
@@ -421,7 +467,8 @@ class PaintByNumberNode(io.ComfyNode):
             perception = PerceptionInputs(
                 albedo=albedo_np,
                 segmentation_mask=segmentation_np,
-                normal_map=normal_np,
+                normal_map=normals_np,
+                normal_strength=normal_strength,
                 lineart=lineart_np,
                 lineart_strength=lineart_strength,
                 invert_lineart=invert_lineart,
@@ -481,12 +528,12 @@ class PaintByNumberNode(io.ComfyNode):
 
             # Render result
             if output_mode == "quantized":
-                result_bgr = processor.last_quantized
+                result_bgr = result.quantized
             else:
                 result_bgr = renderer.render(
-                    processor.last_cleaned_regions,
-                    processor.last_label_data,
-                    processor.last_palette,
+                    result.cleaned_regions,
+                    result.label_data,
+                    result.color_palette,
                     w,
                     h,
                     mode=output_mode,

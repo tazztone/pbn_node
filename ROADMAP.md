@@ -1,8 +1,8 @@
 # Project roadmap
 
-This document outlines the planned improvements and research directions for the
-ComfyUI paint-by-number node. These features are ranked by their potential
-impact on output quality and their ease of implementation.
+The project roadmap outlines the planned improvements and research directions
+for the ComfyUI paint-by-number node. These features are ranked by their
+potential impact on output quality and their ease of implementation.
 
 ## Overview
 
@@ -30,7 +30,7 @@ perception-aware and content-aware system.
 | 16 | **Label Collision Avoidance** | 🟡 UX | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
 | 17 | **Exposed Clean-up Controls** | 🟢 Quality | 🟢 Trivial | 📅 Planned | ★★★★☆ |
 | 18 | **Interactive Palette Controls**| 🟡 UX only | 🟠 Hard (frontend)| 📅 Planned | ★★★☆☆ |
-| 19 | **SAM 3.1 / DA3 / Sapiens2** | 🟢 Transformative | 🔴 Hard (research) | 🧪 Research | ★★☆☆☆ |
+| 19 | **Sapiens / Normal SLIC** | 🟢 Transformative | 🟡 Moderate | ✅ Done | ★★★★☆ |
 | 20 | **Learned Edge Detection** | 🟡 Incremental | 🔴 Hard (research) | 🧪 Research | ★★☆☆☆ |
 
 ---
@@ -108,9 +108,19 @@ segmentation mask (or an automatic Otsu-based fallback) to allocate independent
 color budgets to different image regions. This ensures important details in the
 subject are preserved regardless of background complexity.
 
+### Normal-Map-Guided SLIC
+Integrated 3D geometry into the segmentation pipeline. By augmenting the SLIC
+feature space with surface-normal components (angular gradient, curvature, and
+raw XYZ), superpixel boundaries now respect physical surface creases (like
+facial features or clothing folds) even in low-contrast areas.
+
+### Sapiens Body-Part Adaptive Priority
+Added support for Sapiens segmentation masks. The system now automatically
+identifies anatomical body parts (face, hands, clothing) and applies adaptive
+priority weights to the color quantization and protection maps, ensuring faces
+and hands receive higher fidelity than backgrounds.
+
 ---
-
-
 
 ## 🚀 Planned Features
 
@@ -144,7 +154,6 @@ Rename the exposed parameter from `ciede2000_merge_thresh` to
 
 ---
 
-
 ### `numbers_density` parameter
 
 Add a `numbers_density: float` parameter (default `0.0` = one label per
@@ -159,7 +168,6 @@ the painter to follow without confusion.
 
 - **Status:** Planned.
 - **Impact:** Medium. Requires `LabelData` interface change.
-
 
 ### Perceptual Palette Sorting
 

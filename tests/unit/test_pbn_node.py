@@ -63,16 +63,10 @@ class TestPaintByNumberNode:
                     processing_time=0.1,
                     region_count=1,
                     label_count=1,
+                    cleaned_regions={},
+                    label_data=LabelData(positions={}, font_sizes={}, skipped_regions=set()),
+                    quantized=np.zeros((128, 128, 3), dtype=np.uint8),
                 )
-                # Set required attributes for the renderer
-                mock_proc_inst.last_cleaned_regions = {}
-                mock_proc_inst.last_label_data = LabelData(
-                    positions={}, font_sizes={}, skipped_regions=set()
-                )
-                mock_proc_inst.last_palette = ColorPalette(
-                    colors=np.zeros((1, 3)), hex_colors=["#000000"], color_count=1
-                )
-                mock_proc_inst.last_quantized = np.zeros((128, 128, 3), dtype=np.uint8)
 
                 # Execute twice with same input
                 out1 = PaintByNumberNode.execute(

@@ -1,8 +1,8 @@
 # Testing guide for pbn_node
 
-This guide covers running and adding tests for the Paint By Number custom nodes.
-The testing suite lets you verify node logic and pipeline performance without
-requiring a live ComfyUI server.
+The testing guide covers running and adding tests for the Paint By Number custom
+nodes. The testing suite lets you verify node logic and pipeline performance
+without requiring a live ComfyUI server.
 
 ## Quick start
 
@@ -11,8 +11,8 @@ dependencies like `torch` and `shapely` are available.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> CRITICAL: Always use the exact command format below. Do NOT use `python` or
-> `pytest` directly from your shell.
+> Always use the exact command format below. Don't use `python` or `pytest`
+> directly from your shell.
 
 ```bash
 # Execute from the pbn_node directory
@@ -31,6 +31,9 @@ cd custom_nodes/pbn_node
 ---
 
 ## Test structure
+
+The project organizes tests into unit and integration categories to balance
+execution speed and system-wide verification.
 
 ```text
 tests/
@@ -51,7 +54,10 @@ tests/
 
 ## Test categories
 
-### Unit tests (14 tests)
+We use unit tests for isolated logic and integration tests for end-to-end
+pipeline verification.
+
+### Unit tests (15 tests)
 
 Fast tests that validate individual backend components without ComfyUI
 dependencies.
@@ -72,6 +78,7 @@ dependencies.
 | `test_budget_allocation_k_sum` | Perception budget summation |
 | `test_budget_allocation_min_k` | Minimum k per segment check |
 | `test_albedo_guided_quantization_shift` | Albedo influence verification |
+| `test_normal_guided_slic_crease_preservation` | Normal map geometric alignment |
 
 ### Integration tests (4 tests)
 
@@ -88,6 +95,8 @@ Tests that verify the full processing pipeline and the ComfyUI node class.
 
 ## Test markers
 
+You can run tests by their defined markers to focus on specific scopes.
+
 ```bash
 # Run by marker
 pytest -m unit           # Fast component tests
@@ -98,7 +107,10 @@ pytest -m integration    # Slower workflow tests
 
 ## How it works
 
-### Problem solved
+The test infrastructure overcomes several challenges common in ComfyUI node
+development.
+
+### Problems solved
 
 Standard test runners often fail with ComfyUI nodes because:
 
@@ -119,6 +131,8 @@ Standard test runners often fail with ComfyUI nodes because:
 ---
 
 ## Adding new tests
+
+Follow these patterns when adding new tests to maintain consistency.
 
 ### Unit tests
 
@@ -156,6 +170,8 @@ def test_my_node(sample_image_tensor):
 ---
 
 ## Troubleshooting
+
+Use this table to resolve common testing issues.
 
 | Issue | Solution |
 |-------|----------|
