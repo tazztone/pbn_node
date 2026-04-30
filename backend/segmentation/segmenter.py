@@ -77,6 +77,10 @@ class RegionSegmenter:
         """
         h, w = quantized.shape[:2]
 
+        # Ensure edge_weight_map matches the image dimensions
+        if self.edge_weight_map is not None and self.edge_weight_map.shape[:2] != (h, w):
+            self.edge_weight_map = cv2.resize(self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR)
+
         # Step 1: Convert quantized BGR image to color ID matrix
         color_id_matrix = self._create_color_id_matrix(quantized, colors)
 

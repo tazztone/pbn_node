@@ -103,10 +103,10 @@ def augment_image_with_normals(
         [H, W, 5] float32 — [L, a, b, ang_grad, curvature]
     """
     h, w = lab_image.shape[:2]
-    # Compute features at NATIVE resolution to avoid upscale grid artifacts.
-    # Sobel/Laplacian on an upscaled normal map detects interpolation stair-steps
-    # as false edges, creating a regular grid pattern in SLIC output.
-    normal_channels = build_normal_feature_channels(normal_map, normal_strength)
+    # Apply a slight Gaussian blur to smooth out any subtle grid seams/patching artifacts
+    # from neural network outputs (like Sapiens) before computing derivatives.
+    blurred_normals = cv2.GaussianBlur(normal_map, (5, 5), 0)
+    normal_channels = build_normal_feature_channels(blurred_normals, normal_strength)
 
     # Resize the smooth feature maps (not the raw normals) to match the image
     if normal_channels.shape[:2] != (h, w):
