@@ -44,7 +44,6 @@ class TestPerceptionIntegration:
 
     def test_combined_perception(self, sample_image_tensor):
         # Albedo + Segmentation + Normals + Lineart
-        albedo = sample_image_tensor.clone()
         segmentation = torch.zeros((1, 128, 128, 1), dtype=torch.float32)
         segmentation[0, 10:50, 10:50] = 1.0 / 255.0  # Class 1
 
@@ -57,7 +56,6 @@ class TestPerceptionIntegration:
             simplification=1.0,
             use_watershed=False,
             output_mode="colored",
-            albedo=albedo,
             segmentation=segmentation,
             normals=normals,
             lineart=lineart,

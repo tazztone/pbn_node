@@ -277,12 +277,20 @@ class ColorQuantizer:
         """
         Complete quantization pipeline with optional perception-stack inputs.
         """
-        if perception and perception.albedo is not None and perception.edge_influence > 0:
+        if (
+            perception
+            and (perception.albedo is not None or perception.lineart is not None)
+            and perception.edge_influence > 0
+        ):
             blend = perception.edge_influence
             h, w = image.shape[:2]
-            p_albedo = perception.albedo
-            if p_albedo.shape[:2] != (h, w):
-                p_albedo = cv2.resize(p_albedo, (w, h), interpolation=cv2.INTER_LINEAR)
+
+            if perception.albedo is not None:
+                p_albedo = perception.albedo
+                if p_albedo.shape[:2] != (h, w):
+                    p_albedo = cv2.resize(p_albedo, (w, h), interpolation=cv2.INTER_LINEAR)
+            else:
+                p_albedo = cv2.medianBlur(image, 9)
 
             if perception.lineart is not None:
                 lineart = perception.lineart

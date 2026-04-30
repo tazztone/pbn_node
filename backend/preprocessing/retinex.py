@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import cv2
 import numpy as np
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter  # type: ignore
 
 
 def multiscale_retinex(

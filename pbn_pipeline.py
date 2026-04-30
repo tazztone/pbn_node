@@ -138,15 +138,14 @@ class ImageProcessor:
             self.quantizer.use_ciede2000 = p.use_ciede2000
             self.quantizer.protection_map = protection_map
 
-            # Auto-albedo: estimate albedo via MSR if no external albedo provided
-            if p.use_auto_albedo and (perception is None or perception.albedo is None):
+            # Auto-albedo: estimate albedo via MSR if enabled
+            if p.use_auto_albedo:
                 logger.info("Estimating auto-albedo via MSR Retinex")
                 auto_albedo = multiscale_retinex(input_for_quantization)
-                perception = (
-                    dataclasses.replace(perception, albedo=auto_albedo)
-                    if perception
-                    else PerceptionInputs(albedo=auto_albedo)
-                )
+                if perception is None:
+                    perception = PerceptionInputs(albedo=auto_albedo)
+                else:
+                    perception = dataclasses.replace(perception, albedo=auto_albedo)
                 p = dataclasses.replace(p, perception=perception)
 
             quantized, palette = self.quantizer.quantize(

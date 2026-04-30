@@ -23,8 +23,8 @@ results.
   software like Inkscape or Adobe Illustrator.
 - **Vector preview:** Real-time, resolution-independent SVG preview directly
   within the ComfyUI node body.
-- **Perception stack:** Support for albedo, segmentation masks, lineart, and
-  normal maps to guide color quantization and boundary detection.
+- **Perception stack:** Support for segmentation masks, lineart, and normal maps
+  to guide color quantization and boundary detection.
 - **Auto-albedo:** Integrated Retinex-based shadow removal to estimate clean
   material colors when external maps are missing.
 - **Normal-Map-Guided SLIC:** Leverages 3D surface geometry to ensure region
@@ -68,8 +68,6 @@ nodes.
 The node accepts several configuration parameters to fine-tune the result.
 
 - **image:** The input image tensor you want to process.
-- **albedo:** Optional albedo image used to guide color clustering. This helps
-  isolate material color from lighting conditions.
 - **segmentation:** Optional segmentation or mask image. When provided, the node
   allocates color budgets proportionally to the detected regions.
 - **lineart:** Optional edge map (e.g., from Canny or HED). This prevents color
@@ -86,8 +84,8 @@ The node accepts several configuration parameters to fine-tune the result.
   **balanced**, **portrait**, or **custom**).
 - **subject_priority:** A multiplier for color allocation to non-background
   segments when using a segmentation mask.
-- **material_weight:** Controls the influence of the albedo map over the
-  original photo during quantization.
+- **material_weight:** Controls the influence of the internal albedo estimate
+  over the original photo during quantization.
 - **edge_influence:** Controls how much the lineart edge map biases color
   quantization. High values ensure color boundaries follow edges.
 - **normals:** Optional surface normal map (from Sapiens or Depth-to-Normal).

@@ -32,6 +32,7 @@ PRESETS = {
         "use_shared_borders": True,
         "use_bezier_smooth": False,
         "use_content_protect": False,
+        "use_auto_albedo": True,
     },
     "portrait": {
         "use_slic": True,
@@ -41,6 +42,7 @@ PRESETS = {
         "use_shared_borders": True,
         "use_bezier_smooth": False,
         "use_content_protect": True,
+        "use_auto_albedo": True,
     },
 }
 
@@ -58,15 +60,6 @@ class PaintByNumberNode(io.ComfyNode):
                 io.Image.Input(
                     "image",
                     tooltip="The source image to transform. Supports batch processing.",
-                ),
-                io.Image.Input(
-                    "albedo",
-                    optional=True,
-                    tooltip=(
-                        "Optional 'flat' color map (no shadows/highlights). Get this using nodes "
-                        "like 'Albedo Estimate' or 'Intrinsic Decomposition'. Using albedo helps "
-                        "the PBN logic ignore shadows, resulting in much cleaner regions."
-                    ),
                 ),
                 io.Image.Input(
                     "segmentation",
@@ -421,7 +414,6 @@ class PaintByNumberNode(io.ComfyNode):
         use_watershed=False,
         output_mode="colored",
         preset="balanced",
-        albedo=None,
         segmentation=None,
         lineart=None,
         lineart_strength=0.7,
@@ -459,7 +451,6 @@ class PaintByNumberNode(io.ComfyNode):
             "use_watershed": use_watershed,
             "output_mode": output_mode,
             "preset": preset,
-            "albedo": albedo,
             "segmentation": segmentation,
             "lineart": lineart,
             "lineart_strength": lineart_strength,
@@ -594,10 +585,8 @@ class PaintByNumberNode(io.ComfyNode):
             overrides = PRESETS[preset]
             params.update(overrides)
 
-            # Special case for portrait auto-albedo and mask
             if preset == "portrait":
-                if kwargs.get("albedo") is None:
-                    params["use_auto_albedo"] = True
+                params["use_auto_albedo"] = True
                 if kwargs.get("segmentation") is None:
                     params["use_auto_mask"] = True
 
@@ -608,7 +597,6 @@ class PaintByNumberNode(io.ComfyNode):
         cls, kwargs: dict[str, Any], params: dict[str, Any]
     ) -> PerceptionInputs | None:
         """Decodes various input tensors into the PerceptionInputs structure."""
-        albedo_np = cls._torch_to_bgr(kwargs.get("albedo"))
         normals_np = cls._decode_normals(kwargs.get("normals"))
         lineart_np = cls._decode_lineart(kwargs.get("lineart"), kwargs.get("invert_lineart", False))
         segmentation_np = cls._decode_segmentation(
@@ -618,15 +606,14 @@ class PaintByNumberNode(io.ComfyNode):
         use_auto_mask = params.get("use_auto_mask", False)
 
         has_perception = (
-            any(x is not None for x in [albedo_np, segmentation_np, normals_np, lineart_np])
-            or use_auto_mask
+            any(x is not None for x in [segmentation_np, normals_np, lineart_np]) or use_auto_mask
         )
 
         if not has_perception:
             return None
 
         return PerceptionInputs(
-            albedo=albedo_np,
+            albedo=None,  # Handled internally in pipeline now
             segmentation_mask=segmentation_np,
             normal_map=normals_np,
             normal_strength=kwargs.get("normal_strength", 0.4),
