@@ -72,8 +72,8 @@ The node accepts several configuration parameters to fine-tune the result.
   allocates color budgets proportionally to the detected regions.
 - **lineart:** Optional edge map (e.g., from Canny or HED). This prevents color
   regions from bleeding across semantic boundaries.
-- **num_colors:** The number of color clusters to use. Set this to `0` to enable
-  automatic detection.
+- **num_colors:** The number of color clusters to use (default: 24). Set this
+  to `0` to enable automatic detection.
 - **simplification:** Controls how much the region contours are simplified.
   Accepted values range from `0.5` to `2.0`.
 - **use_watershed:** When enabled, uses the watershed transform for

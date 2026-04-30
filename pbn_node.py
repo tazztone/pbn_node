@@ -126,9 +126,9 @@ class PaintByNumberNode(io.ComfyNode):
                 ),
                 io.Int.Input(
                     "num_colors",
-                    default=0,
+                    default=24,
                     min=0,
-                    max=30,
+                    max=40,
                     tooltip=(
                         "How many unique paint pots you want. Use 0 for 'Auto' mode. "
                         "Beginners should start with 8-12 colors. High-detail projects "
@@ -405,7 +405,7 @@ class PaintByNumberNode(io.ComfyNode):
     def execute(
         cls,
         image,
-        num_colors=0,
+        num_colors=24,
         simplification=1.0,
         use_watershed=False,
         output_mode="colored",
