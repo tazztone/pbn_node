@@ -470,11 +470,13 @@ class RegionSegmenter:
                     self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR
                 )
 
+        # Initialize region colors mapping
+        region_colors: dict[int, int] = {}
+
         if self.use_watershed:
             # Original watershed implementation
             h, w = quantized.shape[:2]
             markers = np.zeros((h, w), dtype=np.int32)
-            region_colors = {}
             next_marker_id = 1
 
             # Get unique colors in the quantized image
@@ -597,7 +599,7 @@ class RegionSegmenter:
 
         return RegionData(
             regions=regions,
-            region_colors=region_colors if "region_colors" in locals() else {},
+            region_colors=region_colors,
             shared_borders=shared_borders,
             adjacency_graph=adjacency_graph,
         )

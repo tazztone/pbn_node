@@ -72,3 +72,4 @@ dmypy.json
 # Project specific
 .agents/
 .kiro/
+example_inputs/

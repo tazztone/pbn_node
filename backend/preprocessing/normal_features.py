@@ -103,12 +103,13 @@ def augment_image_with_normals(
         [H, W, 5] float32 — [L, a, b, ang_grad, curvature]
     """
     h, w = lab_image.shape[:2]
-    # Resize normal_map if needed
-    if normal_map.shape[:2] != (h, w):
-        normal_map = cv2.resize(normal_map, (w, h), interpolation=cv2.INTER_LINEAR)
-        # Re-normalize after resize
-        norms = np.linalg.norm(normal_map, axis=2, keepdims=True).clip(min=1e-6)
-        normal_map = normal_map / norms
-
+    # Compute features at NATIVE resolution to avoid upscale grid artifacts.
+    # Sobel/Laplacian on an upscaled normal map detects interpolation stair-steps
+    # as false edges, creating a regular grid pattern in SLIC output.
     normal_channels = build_normal_feature_channels(normal_map, normal_strength)
+
+    # Resize the smooth feature maps (not the raw normals) to match the image
+    if normal_channels.shape[:2] != (h, w):
+        normal_channels = cv2.resize(normal_channels, (w, h), interpolation=cv2.INTER_LINEAR)
+
     return np.concatenate([lab_image, normal_channels], axis=2)

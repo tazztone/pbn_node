@@ -75,7 +75,7 @@ class ImageProcessor:
             # Stage 2: Content Protection & Perception
             logger.info("Stage 2/6: Analyzing image perception")
             if api:
-                api.execution.set_progress(1, 6)
+                api.execution.set_progress(2, 6)
             perception = p.perception
             lineart_map = perception.lineart if perception else None
             lineart_strength = perception.lineart_strength if perception else 0.0

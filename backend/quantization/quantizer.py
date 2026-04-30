@@ -279,16 +279,23 @@ class ColorQuantizer:
         """
         if perception and perception.albedo is not None and perception.edge_influence > 0:
             blend = perception.edge_influence
+            h, w = image.shape[:2]
+            p_albedo = perception.albedo
+            if p_albedo.shape[:2] != (h, w):
+                p_albedo = cv2.resize(p_albedo, (w, h), interpolation=cv2.INTER_LINEAR)
+
             if perception.lineart is not None:
-                weight_map = perception.lineart[..., np.newaxis] * blend
+                lineart = perception.lineart
+                if lineart.shape[:2] != (h, w):
+                    lineart = cv2.resize(lineart, (w, h), interpolation=cv2.INTER_LINEAR)
+                weight_map = lineart[..., np.newaxis] * blend
                 input_image = (
                     image.astype(np.float32) * (1 - weight_map)
-                    + perception.albedo.astype(np.float32) * weight_map
+                    + p_albedo.astype(np.float32) * weight_map
                 )
             else:
                 input_image = (
-                    image.astype(np.float32) * (1 - blend)
-                    + perception.albedo.astype(np.float32) * blend
+                    image.astype(np.float32) * (1 - blend) + p_albedo.astype(np.float32) * blend
                 )
             input_image = np.clip(input_image, 0, 255).astype(np.uint8)
         else:
