@@ -101,12 +101,8 @@ class RegionData:
     """Data about segmented regions."""
 
     regions: dict[int, Polygon]  # Region ID -> Polygon
-    region_colors: dict[int, int] = field(
-        default_factory=dict
-    )  # Region ID -> Color Index (0-based)
-    shared_borders: dict[int, list[LineString]] = field(
-        default_factory=dict
-    )  # Shared border segments
+    region_colors: dict[int, int] = field(default_factory=dict)  # Region ID -> Color Index (0-based)
+    shared_borders: dict[int, list[LineString]] = field(default_factory=dict)  # Shared border segments
     adjacency_graph: nx.Graph = field(default_factory=nx.Graph)  # Region adjacency
 
 

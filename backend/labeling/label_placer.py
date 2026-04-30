@@ -213,11 +213,7 @@ class LabelPlacer:
                                     gp = Point(gx, gy)
                                     if polygon.contains(gp):
                                         igx, igy = int(gx), int(gy)
-                                        if (
-                                            0 <= igy < h
-                                            and 0 <= igx < w
-                                            and self._exclusion_mask[igy, igx] == 0
-                                        ):
+                                        if 0 <= igy < h and 0 <= igx < w and self._exclusion_mask[igy, igx] == 0:
                                             label_position = gp
                                             found_clear = True
                                             break
@@ -241,6 +237,4 @@ class LabelPlacer:
                 # Skip this region if placement fails
                 skipped_regions.add(region_id)
 
-        return LabelData(
-            positions=positions, font_sizes=font_sizes, skipped_regions=skipped_regions
-        )
+        return LabelData(positions=positions, font_sizes=font_sizes, skipped_regions=skipped_regions)

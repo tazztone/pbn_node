@@ -57,9 +57,7 @@ class TestPaintByNumberNode:
                 mock_proc_inst = mock_proc_cls.return_value
                 mock_proc_inst.process_array.return_value = SVGResult(
                     svg_content="<svg>deterministic test</svg>",
-                    color_palette=ColorPalette(
-                        colors=np.zeros((1, 3)), hex_colors=["#000000"], color_count=1
-                    ),
+                    color_palette=ColorPalette(colors=np.zeros((1, 3)), hex_colors=["#000000"], color_count=1),
                     processing_time=0.1,
                     region_count=1,
                     label_count=1,

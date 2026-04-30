@@ -250,8 +250,7 @@ class PaintByNumberNode(io.ComfyNode):
                     default=True,
                     advanced=True,
                     tooltip=(
-                        "(Advanced) Uses shared paths in SVG to prevent 'white gaps' between "
-                        "regions when rendering."
+                        "(Advanced) Uses shared paths in SVG to prevent 'white gaps' between regions when rendering."
                     ),
                 ),
                 io.Combo.Input(
@@ -385,16 +384,13 @@ class PaintByNumberNode(io.ComfyNode):
             outputs=[
                 io.Image.Output(
                     "IMAGE",
-                    tooltip=(
-                        "The rendered template (colored, outline, or quantized) as a pixel image."
-                    ),
+                    tooltip=("The rendered template (colored, outline, or quantized) as a pixel image."),
                 ),
                 io.String.Output(
                     "SVG",
                     display_name="SVG Content",
                     tooltip=(
-                        "High-quality vector SVG file, ideal for large-format printing or "
-                        "professional vector editing."
+                        "High-quality vector SVG file, ideal for large-format printing or professional vector editing."
                     ),
                 ),
                 io.Int.Output(
@@ -593,9 +589,7 @@ class PaintByNumberNode(io.ComfyNode):
         return params
 
     @classmethod
-    def _prepare_perception_inputs(
-        cls, kwargs: dict[str, Any], params: dict[str, Any]
-    ) -> PerceptionInputs | None:
+    def _prepare_perception_inputs(cls, kwargs: dict[str, Any], params: dict[str, Any]) -> PerceptionInputs | None:
         """Decodes various input tensors into the PerceptionInputs structure."""
         normals_np = cls._decode_normals(kwargs.get("normals"))
         lineart_np = cls._decode_lineart(kwargs.get("lineart"), kwargs.get("invert_lineart", False))
@@ -605,9 +599,7 @@ class PaintByNumberNode(io.ComfyNode):
 
         use_auto_mask = params.get("use_auto_mask", False)
 
-        has_perception = (
-            any(x is not None for x in [segmentation_np, normals_np, lineart_np]) or use_auto_mask
-        )
+        has_perception = any(x is not None for x in [segmentation_np, normals_np, lineart_np]) or use_auto_mask
 
         if not has_perception:
             return None

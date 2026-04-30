@@ -77,9 +77,7 @@ class Vectorizer:
         # Effective area = area of triangle formed by point and its neighbors
         def calculate_area(p1, p2, p3):
             """Calculate area of triangle formed by three points."""
-            return abs(
-                0.5 * (p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1]))
-            )
+            return abs(0.5 * (p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1])))
 
         # Create list of points with their effective areas
         n = len(points)
@@ -305,9 +303,7 @@ class Vectorizer:
 
         return simplified_regions
 
-    def _apply_bezier_smoothing(
-        self, coords: np.ndarray, num_points_per_curve: int = 5
-    ) -> np.ndarray:
+    def _apply_bezier_smoothing(self, coords: np.ndarray, num_points_per_curve: int = 5) -> np.ndarray:
         """
         Fits cubic Bézier curves to the given coordinates to smooth out sharp edges.
         """

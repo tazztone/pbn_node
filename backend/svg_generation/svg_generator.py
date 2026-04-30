@@ -74,19 +74,13 @@ class SVGGenerator:
             fill_color = "#ffffff" if print_mode else color_hex
 
             if print_mode:
-                fill_stroke = (
-                    "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
-                )
+                fill_stroke = "none" if (use_shared_borders and shared_borders) else self.default_stroke_color
             else:
                 fill_stroke = color_hex  # Same as fill to prevent anti-aliasing gaps
 
-            stroke_width_attr = (
-                "" if fill_stroke == "none" else f' stroke-width="{self.default_stroke_width}"'
-            )
+            stroke_width_attr = "" if fill_stroke == "none" else f' stroke-width="{self.default_stroke_width}"'
 
-            svg_parts.append(
-                f'  <g fill="{fill_color}" stroke="{fill_stroke}"{stroke_width_attr}>\n'
-            )
+            svg_parts.append(f'  <g fill="{fill_color}" stroke="{fill_stroke}"{stroke_width_attr}>\n')
 
             for region_id in region_ids:
                 if region_id in regions:
@@ -265,9 +259,7 @@ class SVGGenerator:
 
         # Add Line commands for remaining points
         for x, y in coords[1:]:
-            path_parts.append(
-                f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}"
-            )
+            path_parts.append(f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}")
 
         # Close path
         path_parts.append(" Z")
@@ -286,8 +278,6 @@ class SVGGenerator:
         path_parts = [f"M {x0:.{self.coordinate_precision}f},{y0:.{self.coordinate_precision}f}"]
 
         for x, y in coords[1:]:
-            path_parts.append(
-                f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}"
-            )
+            path_parts.append(f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}")
 
         return "".join(path_parts)

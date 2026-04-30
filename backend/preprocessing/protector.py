@@ -12,13 +12,9 @@ class Protector:
         import mediapipe as mp
 
         self.mp_face_detection = mp.solutions.face_detection
-        self.face_detection = self.mp_face_detection.FaceDetection(
-            model_selection=1, min_detection_confidence=0.5
-        )
+        self.face_detection = self.mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
 
-    def generate_protection_map(
-        self, image: np.ndarray, weight_multiplier: float = 5.0
-    ) -> np.ndarray:
+    def generate_protection_map(self, image: np.ndarray, weight_multiplier: float = 5.0) -> np.ndarray:
         """
         Detect faces in the image and generate a weight map.
 

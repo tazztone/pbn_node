@@ -71,9 +71,7 @@ class RegionSegmenter:
 
         return markers_copy.astype(np.int32)
 
-    def direct_color_segmentation(
-        self, quantized: np.ndarray, colors: np.ndarray
-    ) -> tuple[np.ndarray, dict[int, int]]:
+    def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
         """
         Direct color-based segmentation following pbnify's approach.
         """
@@ -310,9 +308,7 @@ class RegionSegmenter:
 
         return regions_matrix, region_colors
 
-    def _get_region_pbnify(
-        self, mat: np.ndarray, covered: np.ndarray, x: int, y: int, width: int, height: int
-    ) -> dict:
+    def _get_region_pbnify(self, mat: np.ndarray, covered: np.ndarray, x: int, y: int, width: int, height: int) -> dict:
         """
         Implementation of pbnify's getRegion function.
         Uses deque-based flood fill for O(1) pops.
@@ -466,9 +462,7 @@ class RegionSegmenter:
         if self.edge_weight_map is not None:
             h, w = quantized.shape[:2]
             if self.edge_weight_map.shape[:2] != (h, w):
-                self.edge_weight_map = cv2.resize(
-                    self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR
-                )
+                self.edge_weight_map = cv2.resize(self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR)
 
         # Initialize region colors mapping
         region_colors: dict[int, int] = {}
@@ -484,9 +478,7 @@ class RegionSegmenter:
             unique_colors_bgr = np.unique(quantized_2d, axis=0)
 
             # Convert unique BGR colors to LAB for matching with cluster centers
-            unique_colors_lab = cv2.cvtColor(
-                unique_colors_bgr.reshape(1, -1, 3), cv2.COLOR_BGR2LAB
-            ).reshape(-1, 3)
+            unique_colors_lab = cv2.cvtColor(unique_colors_bgr.reshape(1, -1, 3), cv2.COLOR_BGR2LAB).reshape(-1, 3)
 
             # For each cluster center, find the closest quantized color
             for i, center_lab in enumerate(colors):
@@ -574,11 +566,7 @@ class RegionSegmenter:
                                     final_polygon = polygon
                                 elif polygon.geom_type == "GeometryCollection":
                                     # Get all polygons from collection
-                                    polygons = [
-                                        geom
-                                        for geom in polygon.geoms
-                                        if geom.geom_type == "Polygon"
-                                    ]
+                                    polygons = [geom for geom in polygon.geoms if geom.geom_type == "Polygon"]
                                     if polygons:
                                         final_polygon = max(polygons, key=lambda p: p.area)
                                 elif polygon.geom_type == "MultiPolygon":

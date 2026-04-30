@@ -42,9 +42,7 @@ def test_thin_cleanup_veto_on_edge():
     lineart = np.zeros((20, 20), dtype=np.float32)
     lineart[10:12, :] = 1.0
 
-    seg_with_line = RegionSegmenter(
-        use_thin_cleanup=True, min_region_width=5, edge_weight_map=lineart
-    )
+    seg_with_line = RegionSegmenter(use_thin_cleanup=True, min_region_width=5, edge_weight_map=lineart)
     cleaned_with_line = seg_with_line._thin_region_cleanup(mat.copy(), 5)
     assert 2 in cleaned_with_line  # Stripe survived veto
 

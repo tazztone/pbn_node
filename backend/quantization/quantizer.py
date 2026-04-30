@@ -95,9 +95,7 @@ class ColorQuantizer:
                 weights *= pm_flat
 
         # Perform K-means clustering
-        kmeans = KMeans(
-            n_clusters=k, init="k-means++", max_iter=self.max_iterations, n_init=10, random_state=42
-        )
+        kmeans = KMeans(n_clusters=k, init="k-means++", max_iter=self.max_iterations, n_init=10, random_state=42)
         kmeans.fit(fit_pixels, sample_weight=weights)
         centers = kmeans.cluster_centers_
 
@@ -131,9 +129,7 @@ class ColorQuantizer:
         h, w = image.shape[:2]
 
         if segmentation_mask.shape[:2] != (h, w):
-            segmentation_mask = cv2.resize(
-                segmentation_mask, (w, h), interpolation=cv2.INTER_NEAREST
-            )
+            segmentation_mask = cv2.resize(segmentation_mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
         unique_labels, counts = np.unique(segmentation_mask, return_counts=True)
         total_pixels = h * w
@@ -144,9 +140,7 @@ class ColorQuantizer:
         if len(labels) <= 1:
             return self.quantize(image, num_colors, perception=None)
 
-        weights = np.array(
-            [1.0 if label in background_ids else subject_priority for label in labels]
-        )
+        weights = np.array([1.0 if label in background_ids else subject_priority for label in labels])
 
         effective_areas = areas * weights
         proportions = effective_areas / np.sum(effective_areas)
@@ -194,11 +188,7 @@ class ColorQuantizer:
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
         pixels = lab_image.reshape(-1, 3)
 
-        fit_pixels = (
-            self._blend_with_albedo(pixels, albedo, material_weight, h, w)
-            if albedo is not None
-            else pixels
-        )
+        fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w) if albedo is not None else pixels
 
         if self.use_ciede2000:
             std_pixels = cv_to_std_lab(fit_pixels)
@@ -251,9 +241,7 @@ class ColorQuantizer:
             inertias.append(kmeans.inertia_)
 
         try:
-            kneedle = KneeLocator(
-                list(k_range), inertias, curve="convex", direction="decreasing", online=True
-            )
+            kneedle = KneeLocator(list(k_range), inertias, curve="convex", direction="decreasing", online=True)
             optimal_k = kneedle.elbow if kneedle.elbow else self.min_k + 5
         except Exception:
             optimal_k = (self.min_k + self.max_k) // 2
@@ -297,14 +285,9 @@ class ColorQuantizer:
                 if lineart.shape[:2] != (h, w):
                     lineart = cv2.resize(lineart, (w, h), interpolation=cv2.INTER_LINEAR)
                 weight_map = lineart[..., np.newaxis] * blend
-                input_image = (
-                    image.astype(np.float32) * (1 - weight_map)
-                    + p_albedo.astype(np.float32) * weight_map
-                )
+                input_image = image.astype(np.float32) * (1 - weight_map) + p_albedo.astype(np.float32) * weight_map
             else:
-                input_image = (
-                    image.astype(np.float32) * (1 - blend) + p_albedo.astype(np.float32) * blend
-                )
+                input_image = image.astype(np.float32) * (1 - blend) + p_albedo.astype(np.float32) * blend
             input_image = np.clip(input_image, 0, 255).astype(np.uint8)
         else:
             input_image = image
@@ -332,9 +315,7 @@ class ColorQuantizer:
         albedo = perception.albedo if perception else None
         material_weight = perception.material_weight if perception else 0.5
 
-        quantized_image, centers_lab = self.kmeans_lab(
-            input_image, k, albedo=albedo, material_weight=material_weight
-        )
+        quantized_image, centers_lab = self.kmeans_lab(input_image, k, albedo=albedo, material_weight=material_weight)
 
         # Perceptual palette merge
         if self.use_palette_merge and len(centers_lab) > 1:
@@ -376,9 +357,7 @@ class ColorQuantizer:
             h, w = lab_image.shape[:2]
             pixels = lab_image.reshape(-1, 3)
             fit_pixels = (
-                self._blend_with_albedo(pixels, albedo, material_weight, h, w)
-                if albedo is not None
-                else pixels
+                self._blend_with_albedo(pixels, albedo, material_weight, h, w) if albedo is not None else pixels
             )
 
             if self.use_ciede2000:

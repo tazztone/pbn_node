@@ -28,9 +28,7 @@ class TestPBNRenderer:
         region_colors = {1: 1, 2: 0}
         labels = LabelData(positions={}, font_sizes={}, skipped_regions=set())
 
-        canvas = renderer.render(
-            regions, labels, palette, 20, 10, mode="colored", region_colors=region_colors
-        )
+        canvas = renderer.render(regions, labels, palette, 20, 10, mode="colored", region_colors=region_colors)
 
         # BGR format: Red is (0, 0, 255), Blue is (255, 0, 0)
         assert np.all(canvas[5, 5] == [255, 0, 0]), "Region 1 should be blue"
@@ -54,9 +52,7 @@ class TestPBNRenderer:
 
         labels = LabelData(positions={1: Point(5, 5)}, font_sizes={1: 12}, skipped_regions=set())
 
-        renderer.render(
-            regions, labels, palette5, 10, 10, mode="colored", region_colors=region_colors
-        )
+        renderer.render(regions, labels, palette5, 10, 10, mode="colored", region_colors=region_colors)
 
         assert "5" in captured_text, "Label should be '5' (color index 4 + 1)"
 
@@ -77,9 +73,7 @@ class TestPBNRenderer:
         region_colors = {1: 0}
         labels = LabelData(positions={1: Point(5, 5)}, font_sizes={1: 12}, skipped_regions=set())
 
-        renderer.render(
-            regions, labels, palette, 10, 10, mode="colored", region_colors=region_colors
-        )
+        renderer.render(regions, labels, palette, 10, 10, mode="colored", region_colors=region_colors)
 
         assert captured_colors[0] == (255, 255, 255), "Dark background should have white text"
 
@@ -88,9 +82,7 @@ class TestPBNRenderer:
         labels = LabelData(positions={}, font_sizes={}, skipped_regions=set())
 
         # Should fallback to (1-1)%2 = 0 (Red)
-        canvas = renderer.render(
-            regions, labels, palette, 10, 10, mode="colored", region_colors=None
-        )
+        canvas = renderer.render(regions, labels, palette, 10, 10, mode="colored", region_colors=None)
         assert np.all(canvas[5, 5] == [0, 0, 255]), "Fallback should use region_id - 1 mapping"
 
     def test_multiple_regions_same_color(self, renderer, palette, monkeypatch):
@@ -114,8 +106,6 @@ class TestPBNRenderer:
             skipped_regions=set(),
         )
 
-        renderer.render(
-            regions, labels, palette, 20, 10, mode="colored", region_colors=region_colors
-        )
+        renderer.render(regions, labels, palette, 20, 10, mode="colored", region_colors=region_colors)
 
         assert captured_text == ["2", "2"], "Both regions should have the same label"

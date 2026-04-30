@@ -42,9 +42,7 @@ class ImageProcessor:
             self._protector = Protector()
         return self._protector
 
-    def process_array(
-        self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None
-    ) -> SVGResult:
+    def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None) -> SVGResult:
         """
         Process image array through complete pipeline.
 
@@ -148,9 +146,7 @@ class ImageProcessor:
                     perception = dataclasses.replace(perception, albedo=auto_albedo)
                 p = dataclasses.replace(p, perception=perception)
 
-            quantized, palette = self.quantizer.quantize(
-                input_for_quantization, p.num_colors, perception=p.perception
-            )
+            quantized, palette = self.quantizer.quantize(input_for_quantization, p.num_colors, perception=p.perception)
 
             # Stage 4: Region Segmentation
             logger.info("Stage 4/6: Segmenting regions")
@@ -185,9 +181,7 @@ class ImageProcessor:
             )
 
             # Renumber regions to have consecutive IDs (1, 2, 3, ...)
-            cleaned_regions, renumbered_colors = self._renumber_regions(
-                cleaned_regions, updated_region_colors
-            )
+            cleaned_regions, renumbered_colors = self._renumber_regions(cleaned_regions, updated_region_colors)
 
             # Stage 6: Label Placement & SVG Generation
             logger.info("Stage 6/6: Finalizing template")
@@ -235,12 +229,8 @@ class ImageProcessor:
         preserving their color identity.
         """
         sorted_ids = sorted(regions.keys())
-        renumbered_regions = {
-            new_id: regions[old_id] for new_id, old_id in enumerate(sorted_ids, 1)
-        }
+        renumbered_regions = {new_id: regions[old_id] for new_id, old_id in enumerate(sorted_ids, 1)}
         renumbered_colors = {
-            new_id: region_colors[old_id]
-            for new_id, old_id in enumerate(sorted_ids, 1)
-            if old_id in region_colors
+            new_id: region_colors[old_id] for new_id, old_id in enumerate(sorted_ids, 1) if old_id in region_colors
         }
         return renumbered_regions, renumbered_colors

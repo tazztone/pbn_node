@@ -55,9 +55,7 @@ class Preprocessor:
         l_channel, a_channel, b_channel = cv2.split(lab)
 
         # Apply CLAHE to L channel
-        clahe = cv2.createCLAHE(
-            clipLimit=self.clahe_clip_limit, tileGridSize=self.clahe_tile_grid_size
-        )
+        clahe = cv2.createCLAHE(clipLimit=self.clahe_clip_limit, tileGridSize=self.clahe_tile_grid_size)
         l_channel_equalized = clahe.apply(l_channel)
 
         # Merge channels back

@@ -27,9 +27,7 @@ def test_pipeline_perception_impact():
     img = cv2.imread(img_path)
 
     pipeline = ImageProcessor()
-    params_vanilla = ProcessingParameters(
-        num_colors=8, use_slic=True, slic_n_segments=500, slic_compactness=10.0
-    )
+    params_vanilla = ProcessingParameters(num_colors=8, use_slic=True, slic_n_segments=500, slic_compactness=10.0)
 
     # 1. Run Vanilla
     res_vanilla = pipeline.process_array(img, params_vanilla)
@@ -41,9 +39,7 @@ def test_pipeline_perception_impact():
         lineart = cv2.resize(lineart, (img.shape[1], img.shape[0]))
         lineart = lineart.astype(np.float32) / 255.0
 
-        perception_lineart = PerceptionInputs(
-            lineart=lineart, lineart_strength=1.0, edge_influence=0.8
-        )
+        perception_lineart = PerceptionInputs(lineart=lineart, lineart_strength=1.0, edge_influence=0.8)
         params_lineart = ProcessingParameters(
             num_colors=8,
             use_slic=True,

@@ -34,9 +34,7 @@ def test_normal_map_upscale_no_grid_artifacts():
     # Check vertical center line (where the 4x4 blocks meet)
     # The crease is between row 1 and 2 of the 4x4 grid.
     crease_region = ang_grad[30:34, :]
-    assert (
-        np.max(crease_region) > 25.0
-    ), f"Crease not detected strongly enough: {np.max(crease_region)}"
+    assert np.max(crease_region) > 25.0, f"Crease not detected strongly enough: {np.max(crease_region)}"
 
     # Check other areas that would have grid artifacts if upscaling happened first
     # Specifically, check rows that are far from the crease in the 4x4 grid
@@ -44,12 +42,8 @@ def test_normal_map_upscale_no_grid_artifacts():
     artifact_region_2 = ang_grad[56, :]
 
     # Threshold 2.0 is small compared to 50.0 (4%), allows for minor edge effects
-    assert (
-        np.max(artifact_region_1) < 2.0
-    ), f"Grid artifact detected at row 8: {np.max(artifact_region_1)}"
-    assert (
-        np.max(artifact_region_2) < 2.0
-    ), f"Grid artifact detected at row 56: {np.max(artifact_region_2)}"
+    assert np.max(artifact_region_1) < 2.0, f"Grid artifact detected at row 8: {np.max(artifact_region_1)}"
+    assert np.max(artifact_region_2) < 2.0, f"Grid artifact detected at row 56: {np.max(artifact_region_2)}"
 
 
 def test_quantizer_albedo_resize_guard():
