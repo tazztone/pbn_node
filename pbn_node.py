@@ -30,7 +30,7 @@ PRESETS = {
         "use_palette_merge": True,
         "use_thin_cleanup": True,
         "use_shared_borders": True,
-        "use_bezier_smooth": True,
+        "use_bezier_smooth": False,
         "use_content_protect": False,
         "use_auto_albedo": True,
     },
@@ -40,7 +40,7 @@ PRESETS = {
         "use_palette_merge": True,
         "use_thin_cleanup": True,
         "use_shared_borders": True,
-        "use_bezier_smooth": True,
+        "use_bezier_smooth": False,
         "use_content_protect": True,
         "use_auto_albedo": True,
     },
@@ -373,7 +373,7 @@ class PaintByNumberNode(io.ComfyNode):
                 ),
                 io.Int.Input(
                     "smoothing_kernel_size",
-                    default=5,
+                    default=9,
                     min=3,
                     max=21,
                     step=2,
@@ -437,7 +437,7 @@ class PaintByNumberNode(io.ComfyNode):
         painterly_sigma_r=0.45,
         slic_n_segments=500,
         slic_compactness=10.0,
-        smoothing_kernel_size=5,
+        smoothing_kernel_size=9,
     ):
         # 1. Resolve Presets
         kwargs = {
@@ -515,7 +515,7 @@ class PaintByNumberNode(io.ComfyNode):
             painterly_sigma_r=params.get("painterly_sigma_r", 0.45),
             slic_n_segments=params.get("slic_n_segments", 500),
             slic_compactness=params.get("slic_compactness", 10.0),
-            smoothing_kernel_size=params.get("smoothing_kernel_size", 5),
+            smoothing_kernel_size=params.get("smoothing_kernel_size", 9),
         )
 
         # 4. Batch loop
