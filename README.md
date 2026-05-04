@@ -29,6 +29,9 @@ results.
   material colors when external maps are missing.
 - **Modular Backend:** A decoupled, test-driven architecture that ensures
   stability and allows for easy extension of processing stages.
+- **Quality Feedback Loop:** Specialized testing infrastructure that uses
+  computational geometry and edge fidelity metrics to ensure artistic
+  consistency and prevent regressions.
 
 ## Installation
 

@@ -49,6 +49,10 @@ tests/
 └── integration/         # Full workflow tests
     ├── test_pipeline.py # Orchestrator verification
     └── test_nodes.py    # ComfyUI node class verification
+├── quality/             # Visual and numerical quality feedback loop
+│   ├── metrics.py       # Computable quality metrics
+│   ├── test_quality.py  # Regression guards with thresholds
+│   └── render_report.py # Standalone HTML report generator
 ```
 
 ---
@@ -96,6 +100,40 @@ Tests that verify the full processing pipeline and the ComfyUI node class.
 | `test_pbn_node_output_modes` | Result rendering styles (colored, outline) |
 | `test_lineart_integration` | Lineart bias on color quantization |
 | `test_combined_perception` | Stress test with all perception inputs |
+
+### Quality tests
+
+Visual and numerical feedback loop for artistic and technical refinement.
+
+| Test | Description |
+|------|-------------|
+| `test_region_quality_baseline`| Speck ratio, fill, and label coverage checks |
+| `test_lineart_edge_fidelity` | Edge alignment with lineart maps |
+| `test_alternative_maps_fidelity`| Canny and HED map support verification |
+
+#### Computable Metrics
+
+The loop evaluates 6 core dimensions of PBN quality:
+
+1.  **Speck Density**: Ratio of regions smaller than 0.1% of the image area.
+2.  **Color Efficiency**: Percentage of requested colors actually appearing in the SVG.
+3.  **Label Coverage**: Ratio of regions that received a valid label vs. those skipped.
+4.  **Fill Coverage**: Verification that 100% of the canvas is covered by PBN regions.
+5.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
+6.  **Region Dominance**: Size of the largest region relative to total area.
+
+---
+
+## Visual Feedback Loop
+
+For human-in-the-loop quality assessment, use the standalone report generator:
+
+```bash
+# Generate the HTML report
+../../venv/bin/python tests/quality/render_report.py
+```
+
+Open `tests/quality/output/report.html` in your browser to see side-by-side results and detailed metrics.
 
 ---
 

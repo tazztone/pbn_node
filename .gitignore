@@ -73,3 +73,4 @@ dmypy.json
 .agents/
 .kiro/
 example_inputs/
+tests/quality/output/

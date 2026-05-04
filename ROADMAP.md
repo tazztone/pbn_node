@@ -32,6 +32,7 @@ perception-aware and content-aware system.
 | 18 | **Interactive Palette Controls**| 🟡 UX only | 🟠 Hard (frontend)| 📅 Planned | ★★★☆☆ |
 | 19 | **Sapiens / Normal SLIC** | 🟢 Transformative | 🟡 Moderate | 🗑️ Decomm. | ★★★★☆ |
 | 20 | **Modular Backend Refactor** | 🟢 Maintainability | 🟡 Moderate | ✅ Done | ★★★★★ |
+| 21 | **Quality Feedback Loop** | 🟢 Quality Control | 🟢 Low | ✅ Done | ★★★★☆ |
 
 ---
 
@@ -116,6 +117,12 @@ Executed a comprehensive architectural overhaul to improve maintainability and
 performance. We broke down monolithic node classes into modular components,
 implemented lazy-loading for heavy dependencies, and expanded the automated
 test suite to 35 comprehensive unit and integration tests.
+
+### Quality feedback loop
+Implemented a 3-layer feedback system for artistic refinement. This includes
+computational metrics (speck density, color efficiency, label coverage, edge
+fidelity), automated regression guards in the test suite, and a standalone
+visual reporter that generates side-by-side HTML comparisons.
 
 ---
 

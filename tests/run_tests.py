@@ -15,7 +15,7 @@ def main():
     if len(sys.argv) > 1:
         args.extend(sys.argv[1:])
     else:
-        args.extend(["unit", "integration"])
+        args.extend(["unit", "integration", "quality"])
 
     print(f"Executing: {' '.join(args)}")
 
