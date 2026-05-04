@@ -57,7 +57,14 @@ class RegionSegmenter:
         # Step 1: Convert quantized BGR image to color ID matrix
         color_id_matrix = self._create_color_id_matrix(quantized, colors)
 
-        # Step 2: Apply vectorized majority filter (smoothing)
+        # Step 2: Apply light smoothing to remove pixel-level quantization noise
+        # We use a 3x3 median filter which is excellent at removing 'speckle' noise
+        # while strictly preserving region boundaries (unlike Gaussian blur).
+        if color_id_matrix.max() < 256:
+            # OpenCV medianBlur requires uint8 or float32
+            color_id_matrix = cv2.medianBlur(color_id_matrix.astype(np.uint8), 3).astype(np.int32)
+
+        # Step 3: Apply vectorized majority filter (smoothing)
         smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
 
         # Step 2.5: Thin-region scanline removal
@@ -495,18 +502,6 @@ class RegionSegmenter:
         for region_id in region_ids:
             # Create mask for this region
             mask = (segmented == region_id).astype(np.uint8) * 255
-
-            # Apply morphological operations to smooth edges
-            # Opening removes small protrusions, closing fills small holes
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-
-            # Apply Gaussian blur to further smooth edges
-            mask = cv2.GaussianBlur(mask, (5, 5), 0)
-
-            # Threshold back to binary
-            _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
             # Find contours - use CHAIN_APPROX_SIMPLE for efficiency
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

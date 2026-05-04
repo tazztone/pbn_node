@@ -2,10 +2,12 @@
 Run: python tests/quality/render_report.py
 Produces: tests/quality/output/report.html
 """
+
 import argparse
 import base64
 import os
 import sys
+from datetime import datetime
 from typing import TypedDict
 
 import cv2
@@ -18,8 +20,13 @@ for p in [root_dir, parent_dir]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
+# Add the tests directory to path for mock import
+tests_dir = os.path.join(root_dir, "tests")
+if tests_dir not in sys.path:
+    sys.path.insert(0, tests_dir)
+
 # --- MOCKING SETUP ---
-from tests.mock_comfyui import install_comfyui_mocks  # noqa: E402
+from mock_comfyui import install_comfyui_mocks  # noqa: E402
 
 install_comfyui_mocks()
 
@@ -56,7 +63,7 @@ def img_to_b64(img_bgr):
     return base64.b64encode(buf).decode()
 
 
-def generate_report(save_svgs=False, llm_reviewer: LLMReviewer = None):
+def generate_report(save_svgs=False, llm_reviewer: LLMReviewer | None = None):
     rows = []
     processor = ImageProcessor()
 
@@ -81,13 +88,16 @@ def generate_report(save_svgs=False, llm_reviewer: LLMReviewer = None):
                 perception = PerceptionInputs(lineart=edge_map_float, lineart_strength=0.8, edge_influence=0.5)
 
         params = ProcessingParameters(num_colors=run["colors"], perception=perception)
-
         print(f"Processing {run['name']}...")
         result = processor.process_array(img, params)
 
+        # Save Artifacts
+        clean_name = run["name"].replace(" ", "_").replace("(", "").replace(")", "").lower()
+        cv2.imwrite(os.path.join(OUT_DIR, f"{clean_name}_input.png"), img)
+        cv2.imwrite(os.path.join(OUT_DIR, f"{clean_name}_result.png"), result.quantized)
+
         if save_svgs:
-            svg_name = run["name"].replace(" ", "_").replace("(", "").replace(")", "").lower() + ".svg"
-            svg_path = os.path.join(OUT_DIR, svg_name)
+            svg_path = os.path.join(OUT_DIR, f"{clean_name}.svg")
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(result.svg_content)
 
@@ -98,88 +108,97 @@ def generate_report(save_svgs=False, llm_reviewer: LLMReviewer = None):
 
         report = analyze(result, img.shape, requested_colors=run["colors"], lineart=lineart_for_metrics)
 
-        # Thumbnails
-        thumb_in = cv2.resize(img, (320, 320), interpolation=cv2.INTER_AREA)
-        thumb_out = cv2.resize(result.quantized, (320, 320), interpolation=cv2.INTER_AREA)
+        # Thumbnails (Larger for detailed inspection)
+        def resize_maintain_ar(image, max_dim=1024):
+            h, w = image.shape[:2]
+            if max(h, w) <= max_dim:
+                return image
+            scale = max_dim / max(h, w)
+            return cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-        # Status logic (calibrated to geometric metrics)
-        is_good = report.speck_ratio < 0.15 and report.fill_coverage > 0.70 and report.label_coverage > 0.85
-        status = "✅" if is_good else "⚠️"
+        thumb_in = resize_maintain_ar(img)
+        thumb_out = resize_maintain_ar(result.quantized)
 
-        # LLM Critique
+        # Status logic
+        is_warning = (
+            report.speck_ratio > 0.1
+            or report.fill_coverage < 0.7
+            or (report.edge_violation_ratio is not None and report.edge_violation_ratio > 0.42)
+        )
+        status_cls = "status-warn" if is_warning else "status-ok"
+        status_label = "⚠ ATTENTION" if is_warning else "✓ OPTIMAL"
+
         llm_column = ""
         if llm_reviewer:
             print(f"Requesting LLM review for {run['name']}...")
-            _, img_encoded = cv2.imencode(".webp", result.quantized, [cv2.IMWRITE_WEBP_QUALITY, 80])
-            critique = llm_reviewer.review_image(img_encoded.tobytes())
-            llm_column = f'<td style="max-width: 300px; font-size: 0.85em; color: #ccc;">{critique}</td>'
+            _, img_encoded = cv2.imencode(".jpg", result.quantized, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            critique = llm_reviewer.review_image(img_encoded.tobytes(), mime_type="image/jpeg") or "N/A (Review Failed)"
+            llm_column = f'<td class="critique-cell"><div class="critique-box">{critique}</div></td>'
 
         rows.append(
             f"""
-        <tr>
-          <td>
-            <div style="font-weight:bold; font-size: 1.2em;">{status} {run['name']}</div>
-            <div style="color: #888; margin-top: 5px;">Colors: {run['colors']} | Map: {run['map'] or 'None'}</div>
+        <tr class="{status_cls}">
+          <td class="scenario-cell">
+            <div class="scenario-header">
+                <span class="status-badge">{status_label}</span>
+                <div class="scenario-name">{run["name"]}</div>
+            </div>
+            <div class="scenario-meta">Colors: {run["colors"]} | Map: {run["map"] or "None"}</div>
+
+            <div class="metrics-grid" style="margin-top: 20px;">
+                <div class="metric-card">
+                    <label>Regions</label>
+                    <value>{report.total_regions}</value>
+                </div>
+                <div class="metric-card {"warn" if report.speck_ratio > 0.05 else ""}">
+                    <label>Speck Ratio</label>
+                    <value>{report.speck_ratio:.1%}</value>
+                </div>
+                <div class="metric-card {"warn" if report.fill_coverage < 0.85 else ""}">
+                    <label>Fill</label>
+                    <value>{report.fill_coverage:.1%}</value>
+                </div>
+                <div class="metric-card {"warn" if (report.edge_violation_ratio or 0) > 0.42 else ""}">
+                    <label>Edge Fid.</label>
+                    <value>{
+                f"{100 - report.edge_violation_ratio * 100:.1f}%" if report.edge_violation_ratio is not None else "N/A"
+            }</value>
+                </div>
+            </div>
           </td>
-          <td><img src="data:image/png;base64,{img_to_b64(thumb_in)}" title="Input"></td>
-          <td><img src="data:image/png;base64,{img_to_b64(thumb_out)}" title="Output"></td>
-          <td class="metrics">
-            <div class="metric">Regions: <span>{report.total_regions}</span></div>
-            <div class="metric">Specks: <span>{report.speck_count} ({report.speck_ratio:.1%})</span></div>
-            <div class="metric">Fill: <span>{report.fill_coverage:.1%}</span></div>
-            <div class="metric">Labels: <span>{report.label_coverage:.1%}
-                ({report.unlabeled_count} skipped)</span></div>
-            <div class="metric">Color Efficiency: <span>{report.color_efficiency:.1%}
-                ({report.actual_color_count}/{report.requested_color_count})</span></div>
-            <div class="metric">Edge Violation: <span>
-                {f"{report.edge_violation_ratio:.1%}" if report.edge_violation_ratio
-                 is not None else "N/A"}</span></div>
+          <td colspan="2">
+            <div class="comparison-grid">
+                <div class="img-container">
+                    <label>SOURCE INPUT</label>
+                    <img src="data:image/png;base64,{img_to_b64(thumb_in)}"
+                         onclick="this.classList.toggle('zoom')"
+                         title="Click to zoom">
+                </div>
+                <div class="img-container">
+                    <label>QUANTIZED RESULT</label>
+                    <img src="data:image/png;base64,{img_to_b64(thumb_out)}"
+                         onclick="this.classList.toggle('zoom')"
+                         title="Click to zoom">
+                </div>
+            </div>
           </td>
           {llm_column}
         </tr>"""
         )
 
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>PBN Quality Report</title>
-    <style>
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: #0f0f12; color: #e0e0e0; margin: 0; padding: 20px; }}
-        h1 {{ color: #fff; border-bottom: 2px solid #333; padding-bottom: 10px; }}
-        table {{ border-collapse: collapse; width: 100%; background: #1a1a1e;
-                border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
-        th {{ background: #25252b; color: #aaa; text-align: left; padding: 15px;
-                text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; }}
-        td {{ border-bottom: 1px solid #2a2a30; padding: 15px; vertical-align: top; }}
-        tr:last-child td {{ border-bottom: none; }}
-        img {{ display: block; border-radius: 4px; border: 1px solid #333; }}
-        .metrics {{ min-width: 250px; }}
-        .metric {{ margin-bottom: 8px; font-size: 0.9em; color: #bbb; }}
-        .metric span {{ color: #fff; font-weight: bold; float: right; }}
-    </style>
-</head>
-<body>
-    <h1>PBN Quality Report</h1>
-    <table>
-        <thead>
-            <tr>
-                <th>Scenario</th>
-                <th>Source</th>
-                <th>Result</th>
-                <th>Metrics</th>
-                { '<th>LLM Critique</th>' if llm_reviewer else '' }
-            </tr>
-        </thead>
-        <tbody>
-            {''.join(rows)}
-        </tbody>
-    </table>
-    <div style="margin-top: 30px; font-size: 0.8em; color: #555; text-align: center;">
-        Generated by PBN Quality Suite
-    </div>
-</body>
-</html>"""
+    # Load template
+    template_path = os.path.join(os.path.dirname(__file__), "report_template.html")
+    if os.path.exists(template_path):
+        with open(template_path, encoding="utf-8") as f:
+            template = f.read()
+    else:
+        template = "<html><body><h1>Report Template Missing</h1>{{rows}}</body></html>"
+
+    html = template.format(
+        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        llm_header="<th>AI Visual Critique</th>" if llm_reviewer else "",
+        rows="".join(rows),
+    )
 
     report_path = os.path.join(OUT_DIR, "report.html")
     with open(report_path, "w", encoding="utf-8") as f:

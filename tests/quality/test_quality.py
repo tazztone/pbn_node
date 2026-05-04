@@ -59,9 +59,9 @@ def test_lineart_edge_fidelity():
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=16, lineart=lineart)
 
-    # With lineart and strong edge threshold (0.5), we expect violation < 0.5
+    # With lineart and strong edge threshold (0.5), we expect violation < 0.42
     assert report.edge_violation_ratio is not None
-    assert report.edge_violation_ratio < 0.5, f"Poor lineart edge fidelity: {report.edge_violation_ratio:.1%}"
+    assert report.edge_violation_ratio < 0.42, f"Poor lineart edge fidelity: {report.edge_violation_ratio:.1%}"
 
 
 @pytest.mark.quality
@@ -81,4 +81,4 @@ def test_alternative_maps_fidelity(map_name):
     report = analyze(result, img.shape, requested_colors=16, lineart=edge_map)
 
     assert report.edge_violation_ratio is not None
-    assert report.edge_violation_ratio < 0.5, f"Poor edge fidelity for {map_name}: {report.edge_violation_ratio:.1%}"
+    assert report.edge_violation_ratio < 0.42, f"Poor edge fidelity for {map_name}: {report.edge_violation_ratio:.1%}"

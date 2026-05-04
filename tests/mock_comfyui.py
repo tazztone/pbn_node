@@ -20,6 +20,8 @@ def install_comfyui_mocks():
         sys.modules["comfy"] = MagicMock()
 
     # --- Mock comfy_api for V3 nodes ---
+    # We check both to handle cases where a partial/different comfy_api might be present
+    # in non-standard environments.
     if "comfy_api" not in sys.modules or "comfy_api.latest" not in sys.modules:
 
         class MockComfyNode:

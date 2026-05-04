@@ -74,3 +74,4 @@ dmypy.json
 .kiro/
 example_inputs/
 tests/quality/output/
+tests/quality/.llm_cache.json

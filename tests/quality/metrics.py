@@ -67,8 +67,16 @@ def analyze(
     unlabeled = len(result.label_data.skipped_regions)
     label_coverage = labeled / total_regions if total_regions > 0 else 0.0
 
-    # Fill coverage: geometric area sum / total pixels
-    fill_coverage = total_geometric_area / total_pixels
+    # Fill coverage: use rasterization to get exact pixel count
+    # This avoids the underestimation inherent in geometric area sums
+    mask = np.zeros((h, w), dtype=np.uint8)
+    for _rid, poly in regions.items():
+        # Convert shapely polygon to cv2-compatible contour
+        ext_coords = np.array(poly.exterior.coords, dtype=np.int32)
+        cv2.fillPoly(mask, [ext_coords], 255)
+
+    fill_pixels = np.count_nonzero(mask)
+    fill_coverage = fill_pixels / total_pixels
 
     # Color efficiency
     actual_colors = result.color_palette.color_count

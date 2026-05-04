@@ -36,9 +36,11 @@ class LLMReviewer:
     def _get_image_hash(self, img_bytes: bytes) -> str:
         return hashlib.sha256(img_bytes).hexdigest()
 
-    def review_image(self, img_bytes: bytes, prompt_type: str = "pbn_standard") -> str:
+    def review_image(
+        self, img_bytes: bytes, mime_type: str = "image/webp", prompt_type: str = "pbn_standard"
+    ) -> str | None:
         """
-        Submits image for review, returns critique text.
+        Submits image for review, returns critique text or None on failure.
         """
         img_hash = self._get_image_hash(img_bytes)
         cache_key = f"{img_hash}_{self.model}_{prompt_type}"
@@ -46,14 +48,14 @@ class LLMReviewer:
         if cache_key in self.cache:
             return self.cache[cache_key]
 
-        critique = self._query_llm(img_bytes, prompt_type)
+        critique = self._query_llm(img_bytes, mime_type, prompt_type)
         if critique:
             self.cache[cache_key] = critique
             self._save_cache()
             return critique
-        return "LLM Review Failed."
+        return None
 
-    def _query_llm(self, img_bytes: bytes, prompt_type: str) -> str | None:
+    def _query_llm(self, img_bytes: bytes, mime_type: str, prompt_type: str) -> str | None:
         b64_img = base64.b64encode(img_bytes).decode("utf-8")
 
         prompts = {
@@ -77,10 +79,13 @@ class LLMReviewer:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/webp;base64,{b64_img}"}},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_img}"}},
                     ],
                 }
             ],
+            "max_tokens": 500,
+            "temperature": 0.2,
+            "stream": False,
         }
 
         headers = {
@@ -97,7 +102,7 @@ class LLMReviewer:
                 headers=headers,
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=120) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 return res_data["choices"][0]["message"]["content"]
         except Exception as e:
