@@ -81,7 +81,6 @@ pbn_node/
 │   │
 │   ├── preprocessing/
 │   │   ├── preprocessor.py       # Painterly bilateral filter
-│   │   ├── normal_features.py    # LAB+normal channel augmentation for SLIC
 │   │   ├── retinex.py            # Multiscale Retinex (auto-albedo)
 │   │   ├── protector.py          # Mediapipe face/hand protection maps
 │   │   └── sapiens_priority.py   # Body-part priority weight maps
@@ -122,8 +121,8 @@ this file defines shared data structures; stages import only from here.
 
 | Dataclass | Owner | Purpose |
 |---|---|---|
-| `PerceptionInputs` | Input to pipeline | Container for all optional perception priors: albedo, segmentation mask, normal map, lineart, and their influence weights |
-| `ProcessingParameters` | Input to pipeline | All scalar configuration — `num_colors`, `use_slic`, `use_watershed`, presets, SLIC tuning, smoothing kernel size, etc. |
+| `PerceptionInputs` | Input to pipeline | Container for all optional perception priors: albedo, segmentation mask, lineart, and their influence weights |
+| `ProcessingParameters` | Input to pipeline | All scalar configuration — `num_colors`, `use_watershed`, presets, smoothing kernel size, etc. |
 | `ColorPalette` | Stage 3 → 4, 5, 6 | LAB color array, hex strings, and total color count |
 | `RegionData` | Stage 4 → 5 | `{region_id: Polygon}`, color index map, shared border `LineString` dict, adjacency `nx.Graph` |
 | `LabelData` | Stage 6 | `{region_id: Point}` positions, per-region font sizes, and the set of regions too small to label |
@@ -153,11 +152,10 @@ When disabled, the raw BGR image is passed through unchanged.
 
 ### Stage 2 — Perception & Protection
 
-**Modules:** `preprocessor.py`, `protector.py`, `sapiens_priority.py`,
-`normal_features.py`
+**Modules:** `preprocessor.py`, `protector.py`, `sapiens_priority.py`
 
 This stage assembles all optional prior information into a single upstream
-influence map before quantization. Four sub-systems run here:
+influence map before quantization. Two sub-systems run here:
 
 - **Content protection map** (`protector.py`): When `use_content_protect=True`,
   Mediapipe detects faces and hands and produces a float weight map. High-weight
@@ -168,19 +166,6 @@ influence map before quantization. Four sub-systems run here:
   mask is provided as a 2D grayscale class map (e.g., from Sapiens), this
   module converts class IDs to per-pixel priority weights. The resulting map is
   multiplied with the protection map if both are active.
-
-- **Normal-map SLIC augmentation** (`normal_features.py`): When `use_slic=True`
-  and a normal map is connected, the LAB image is extended to 5 channels
-  `[L, a, b, ang_grad, curvature]` before being passed to
-  `skimage.segmentation.slic`. The angular gradient (Sobel of the normal field)
-  and curvature (Laplacian of the normal field) are scaled to LAB range
-  (`target_scale=50.0`) so SLIC treats them as co-equal color features.
-  This causes superpixel boundaries to follow surface creases that are invisible
-  to pure color analysis. **This path is only active when `use_slic=True`.**
-
-- **Standard SLIC path**: When no normal map is provided, standard RGB SLIC
-  runs on the preprocessed image and its output is averaged into superpixel
-  blocks before Stage 3.
 
 ### Stage 3 — Color Quantization
 
@@ -281,7 +266,6 @@ stage with a different mechanism:
 |---|---|---|---|---|
 | **Segmentation mask** | `segmentation` | Stage 3 | Splits color budget per region; builds priority map | Grayscale class map or RGB-packed |
 | **Lineart / edge map** | `lineart` | Stage 3 + 4 | Biases quantizer centroids; acts as barrier in smoothing kernel | Any single-channel edge map; `invert_lineart` to flip polarity |
-| **Normal map** | `normals` | Stage 2 (SLIC) | Augments LAB image with angular gradient + curvature channels | **Only active when `use_slic=True`** |
 | **Albedo** | Internal / auto | Stage 3 | Blends shadow-free color estimate into quantizer input | Auto-computed via Retinex when `use_auto_albedo=True` |
 
 These inputs are decoded from ComfyUI tensors in `pbn_node.py` and bundled
@@ -370,8 +354,6 @@ pbn_node.py
         ├── backend/models.py
         ├── backend/preprocessing/preprocessor.py
         │     └── cv2 (stylization)
-        ├── backend/preprocessing/normal_features.py
-        │     └── cv2 (Sobel, Laplacian)
         ├── backend/preprocessing/retinex.py
         │     └── numpy, cv2
         ├── backend/preprocessing/protector.py          [lazy-loaded]

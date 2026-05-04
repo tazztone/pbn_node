@@ -13,12 +13,10 @@ from shapely.geometry import LineString, Point, Polygon
 
 @dataclass
 class PerceptionInputs:
-    """Container for perception-stack inputs like albedo, segmentation, and normals."""
+    """Container for perception-stack inputs like albedo, segmentation, and lineart."""
 
     albedo: np.ndarray | None = None
     segmentation_mask: np.ndarray | None = None
-    normal_map: np.ndarray | None = None
-    normal_strength: float = 0.4  # 0=off, 1=full influence
     lineart: np.ndarray | None = None  # [H,W] float32 [0,1] edge weight map
     lineart_strength: float = 0.7  # segmentation boundary hardness [0,1]
     invert_lineart: bool = False
@@ -37,8 +35,6 @@ class PerceptionInputs:
             raise ValueError("edge_influence must be between 0.0 and 1.0")
         if not (0.0 <= self.lineart_strength <= 1.0):
             raise ValueError("lineart_strength must be between 0.0 and 1.0")
-        if not (0.0 <= self.normal_strength <= 1.0):
-            raise ValueError("normal_strength must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -104,6 +100,7 @@ class RegionData:
     region_colors: dict[int, int] = field(default_factory=dict)  # Region ID -> Color Index (0-based)
     shared_borders: dict[int, list[LineString]] = field(default_factory=dict)  # Shared border segments
     adjacency_graph: nx.Graph = field(default_factory=nx.Graph)  # Region adjacency
+    segmented_matrix: np.ndarray | None = None  # [H, W] int32 region ID map
 
 
 @dataclass

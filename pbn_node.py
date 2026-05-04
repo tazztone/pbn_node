@@ -101,29 +101,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "background (e.g., standard Canny)."
                     ),
                 ),
-                io.Image.Input(
-                    "normals",
-                    optional=True,
-                    tooltip=(
-                        "Optional surface normal map (from Sapiens or a Depth-to-Normal node). "
-                        "Causes superpixel boundaries to align with 3D surface creases (shoulder "
-                        "edges, facial structure) even when colors on both sides are similar. "
-                        "Expects a standard RGB normal map where R=X, G=Y, B=Z in [-1,1] range."
-                    ),
-                ),
-                io.Float.Input(
-                    "normal_strength",
-                    default=0.4,
-                    min=0.0,
-                    max=1.0,
-                    step=0.05,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) How strongly the normal map influences superpixel shapes. "
-                        "0 = pure color-based SLIC; 1 = normals dominate shape. "
-                        "0.3–0.5 is a good starting range for portraits."
-                    ),
-                ),
                 io.Int.Input(
                     "num_colors",
                     default=24,
@@ -414,8 +391,6 @@ class PaintByNumberNode(io.ComfyNode):
         lineart=None,
         lineart_strength=0.7,
         invert_lineart=False,
-        normals=None,
-        normal_strength=0.4,
         segmentation_format="auto",
         use_slic=True,
         use_ciede2000=True,
@@ -451,8 +426,6 @@ class PaintByNumberNode(io.ComfyNode):
             "lineart": lineart,
             "lineart_strength": lineart_strength,
             "invert_lineart": invert_lineart,
-            "normals": normals,
-            "normal_strength": normal_strength,
             "segmentation_format": segmentation_format,
             "use_slic": use_slic,
             "use_ciede2000": use_ciede2000,
@@ -591,7 +564,6 @@ class PaintByNumberNode(io.ComfyNode):
     @classmethod
     def _prepare_perception_inputs(cls, kwargs: dict[str, Any], params: dict[str, Any]) -> PerceptionInputs | None:
         """Decodes various input tensors into the PerceptionInputs structure."""
-        normals_np = cls._decode_normals(kwargs.get("normals"))
         lineart_np = cls._decode_lineart(kwargs.get("lineart"), kwargs.get("invert_lineart", False))
         segmentation_np = cls._decode_segmentation(
             kwargs.get("segmentation"), kwargs.get("segmentation_format", "auto")
@@ -599,7 +571,7 @@ class PaintByNumberNode(io.ComfyNode):
 
         use_auto_mask = params.get("use_auto_mask", False)
 
-        has_perception = any(x is not None for x in [segmentation_np, normals_np, lineart_np]) or use_auto_mask
+        has_perception = any(x is not None for x in [segmentation_np, lineart_np]) or use_auto_mask
 
         if not has_perception:
             return None
@@ -607,8 +579,6 @@ class PaintByNumberNode(io.ComfyNode):
         return PerceptionInputs(
             albedo=None,  # Handled internally in pipeline now
             segmentation_mask=segmentation_np,
-            normal_map=normals_np,
-            normal_strength=kwargs.get("normal_strength", 0.4),
             lineart=lineart_np,
             lineart_strength=kwargs.get("lineart_strength", 0.7),
             invert_lineart=kwargs.get("invert_lineart", False),
@@ -629,16 +599,6 @@ class PaintByNumberNode(io.ComfyNode):
         if img_np.ndim == 2:
             return cv2.cvtColor(img_np, cv2.COLOR_GRAY2BGR)
         return cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-
-    @staticmethod
-    def _decode_normals(t: torch.Tensor | None) -> np.ndarray | None:
-        """Decodes Normal map tensor to [-1, 1] unit vectors."""
-        if t is None:
-            return None
-        arr = t[0].cpu().numpy()
-        normals = arr * 2.0 - 1.0
-        norms = np.linalg.norm(normals, axis=2, keepdims=True).clip(min=1e-6)
-        return normals / norms
 
     @staticmethod
     def _decode_lineart(t: torch.Tensor | None, invert: bool) -> np.ndarray | None:

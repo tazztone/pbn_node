@@ -9,7 +9,6 @@ import skimage.segmentation
 
 from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
-from .backend.preprocessing.normal_features import augment_image_with_normals
 from .backend.preprocessing.preprocessor import Preprocessor
 from .backend.preprocessing.protector import Protector
 from .backend.preprocessing.retinex import multiscale_retinex
@@ -78,6 +77,10 @@ class ImageProcessor:
             lineart_map = perception.lineart if perception else None
             lineart_strength = perception.lineart_strength if perception else 0.0
 
+            # Use lineart map as edge map
+            edge_map = lineart_map
+            edge_strength = lineart_strength
+
             # Generate protection map if enabled
             protection_map = None
             if p.use_content_protect:
@@ -95,29 +98,14 @@ class ImageProcessor:
 
             # Apply SLIC superpixels if enabled
             if p.use_slic:
-                normal_map = perception.normal_map if perception else None
-                normal_strength = perception.normal_strength if perception else 0.0
-
-                if normal_map is not None and normal_strength > 0:
-                    # Build 5-channel LAB + normal-feature image for SLIC
-                    lab_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2LAB).astype(np.float32)
-                    slic_input = augment_image_with_normals(lab_image, normal_map, normal_strength)
-                    segments = skimage.segmentation.slic(
-                        slic_input,
-                        n_segments=p.slic_n_segments,
-                        compactness=p.slic_compactness,
-                        start_label=1,
-                        channel_axis=-1,
-                    )
-                else:
-                    # Standard RGB SLIC
-                    rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
-                    segments = skimage.segmentation.slic(
-                        rgb_image,
-                        n_segments=p.slic_n_segments,
-                        compactness=p.slic_compactness,
-                        start_label=1,
-                    )
+                # Standard RGB SLIC
+                rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
+                segments = skimage.segmentation.slic(
+                    rgb_image,
+                    n_segments=p.slic_n_segments,
+                    compactness=p.slic_compactness,
+                    start_label=1,
+                )
 
                 input_for_quantization = skimage.color.label2rgb(
                     segments, preprocessed, kind="avg", bg_label=-1
@@ -158,8 +146,8 @@ class ImageProcessor:
                 use_ciede2000=p.use_ciede2000,
                 use_thin_cleanup=p.use_thin_cleanup,
                 min_region_width=p.min_region_width,
-                edge_weight_map=lineart_map,
-                lineart_strength=lineart_strength,
+                edge_weight_map=edge_map,
+                lineart_strength=edge_strength,
                 smoothing_kernel_size=p.smoothing_kernel_size,
             )
             region_data = segmenter.segment(quantized, palette.colors)
@@ -204,6 +192,38 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(6, 6)
 
+            # Create final high-fidelity preview from simplified polygons
+            # This reflects the ACTUAL smooth boundaries and simplification in the final SVG
+            h, w = quantized.shape[:2]
+            final_preview = np.zeros((h, w, 3), dtype=np.uint8)
+
+            # Convert palette to BGR for rasterization using OpenCV's internal mapping
+            palette_lab_uint8 = palette.colors.astype(np.uint8).reshape(1, -1, 3)
+            palette_bgr = cv2.cvtColor(palette_lab_uint8, cv2.COLOR_LAB2BGR).reshape(-1, 3)
+
+            # Draw each polygon
+            for rid, polygon in cleaned_regions.items():
+                if rid in renumbered_colors:
+                    color_idx = renumbered_colors[rid]
+                    color = palette_bgr[color_idx].tolist()
+
+                    # Convert polygon coordinates to numpy for cv2.fillPoly
+                    if polygon.exterior:
+                        pts = np.array(polygon.exterior.coords, dtype=np.int32)
+                        cv2.fillPoly(final_preview, [pts], color)
+
+                        # Handle holes (interiors)
+                        for _ in polygon.interiors:
+                            # Note: We don't really have 'holes' in a typical PBN,
+                            # but for completeness we fill them with background or handle as needed.
+                            # In PBN, polygons are usually touching, not nested.
+                            pass
+
+            # If there are any unfilled pixels (black), fill them with the original quantized image
+            # as a fallback, though vectorized regions should cover the whole image.
+            mask = np.all(final_preview == 0, axis=2)
+            final_preview[mask] = quantized[mask]
+
             processing_time = time.time() - start_time
 
             return SVGResult(
@@ -214,7 +234,7 @@ class ImageProcessor:
                 label_count=len(label_data.positions),
                 cleaned_regions=cleaned_regions,
                 label_data=label_data,
-                quantized=quantized,
+                quantized=final_preview,
                 region_colors=renumbered_colors,
                 shared_borders=region_data.shared_borders,
             )

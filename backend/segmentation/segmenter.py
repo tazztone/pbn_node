@@ -346,33 +346,65 @@ class RegionSegmenter:
 
     def _remove_region_pbnify(self, mat: np.ndarray, region: dict):
         """
-        Exact implementation of pbnify's removeRegion function.
-        Merges small region with a neighbor.
+        Implementation of pbnify's removeRegion function, enhanced with edge-awareness.
+        Merges small region with the neighbor separated by the WEAKEST edge.
         """
         if not region["x"]:
             return
 
-        x0, y0 = region["x"][0], region["y"][0]
+        x_coords = np.array(region["x"])
+        y_coords = np.array(region["y"])
         region_value = region["value"]
-
-        # Find a neighboring value (look above first, then below)
-        new_value = region_value  # fallback
         h, w = mat.shape
 
-        if y0 > 0:
-            new_value = mat[y0 - 1, x0]
+        # Find all neighbor pixels (4-connected) that are not part of this region
+        neighbor_votes: dict[int, float] = {}  # (value) -> min_edge_weight
+
+        # Check all boundary pixels of the region
+        for i in range(len(x_coords)):
+            x, y = x_coords[i], y_coords[i]
+
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h:
+                    neighbor_val = mat[ny, nx]
+                    if neighbor_val != region_value:
+                        # Get edge weight at this boundary
+                        edge_val = 0.0
+                        if self.edge_weight_map is not None:
+                            # Use max of the two pixels as the boundary weight
+                            edge_val = max(self.edge_weight_map[y, x], self.edge_weight_map[ny, nx])
+
+                        if neighbor_val not in neighbor_votes or edge_val < neighbor_votes[neighbor_val]:
+                            neighbor_votes[neighbor_val] = edge_val
+
+        # Pick neighbor with the weakest boundary edge
+        if neighbor_votes:
+            best_neighbor = min(neighbor_votes, key=lambda k: neighbor_votes[k])
+            min_edge = neighbor_votes[best_neighbor]
+
+            # Hard Veto: If the weakest boundary is still a strong edge,
+            # don't merge. This preserves small geometric details.
+            # Scaling: higher strength makes the veto more sensitive.
+            veto_threshold = max(0.2, 0.9 - (self.lineart_strength * 0.8))
+            if min_edge > veto_threshold:
+                return  # Skip merge! Preserve this small detail.
+
+            new_value = best_neighbor
         else:
-            # Look below (getBelowValue logic)
-            y = y0
-            while y < h and mat[y, x0] == region_value:
-                y += 1
-            if y < h:
-                new_value = mat[y, x0]
+            # Fallback to original pbnify logic if no neighbors found
+            new_value = region_value
+            if y_coords[0] > 0:
+                new_value = mat[y_coords[0] - 1, x_coords[0]]
+            else:
+                y = y_coords[0]
+                while y < h and mat[y, x_coords[0]] == region_value:
+                    y += 1
+                if y < h:
+                    new_value = mat[y, x_coords[0]]
 
         # Assign all pixels in the region to the new value
-        for i in range(len(region["x"])):
-            x, y = region["x"][i], region["y"][i]
-            mat[y, x] = new_value
+        mat[y_coords, x_coords] = new_value
 
     def build_adjacency_graph(self, regions: np.ndarray) -> nx.Graph:
         """
@@ -594,4 +626,5 @@ class RegionSegmenter:
             region_colors=region_colors,
             shared_borders=shared_borders,
             adjacency_graph=adjacency_graph,
+            segmented_matrix=segmented,
         )

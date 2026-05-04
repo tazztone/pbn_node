@@ -23,12 +23,10 @@ results.
   software like Inkscape or Adobe Illustrator.
 - **Vector preview:** Real-time, resolution-independent SVG preview directly
   within the ComfyUI node body.
-- **Perception stack:** Support for segmentation masks, lineart, and normal maps
+- **Perception stack:** Support for segmentation masks and lineart maps
   to guide color quantization and boundary detection.
 - **Auto-albedo:** Integrated Retinex-based shadow removal to estimate clean
   material colors when external maps are missing.
-- **Normal-Map-Guided SLIC:** Leverages 3D surface geometry to ensure region
-  boundaries follow physical creases and anatomical features.
 - **Sapiens Adaptive Priority:** Automatically prioritizes faces, hands, and
   subject regions for higher detail preservation.
 - **Modular Backend:** A decoupled, test-driven architecture that ensures
@@ -88,9 +86,6 @@ The node accepts several configuration parameters to fine-tune the result.
   over the original photo during quantization.
 - **edge_influence:** Controls how much the lineart edge map biases color
   quantization. High values ensure color boundaries follow edges.
-- **normals:** Optional surface normal map (from Sapiens or Depth-to-Normal).
-  Causes superpixel boundaries to align with 3D surface creases.
-- **normal_strength:** How strongly the normal map influences superpixel shapes.
 - **segmentation_format:** How to interpret the segmentation map (`auto`,
   `grayscale`, or `rgb_packed`).
 - **use_auto_albedo:** When enabled, automatically estimates a shadow-free

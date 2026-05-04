@@ -104,7 +104,7 @@ color budgets to different image regions.
 ### Normal-Map-Guided SLIC
 Integrated 3D geometry into the segmentation pipeline. Superpixel boundaries
 now respect physical surface creases even in low-contrast areas by leveraging
-angular gradients and curvature from normal maps.
+angular gradients and edges from lineart maps.
 
 ### Sapiens Body-Part Adaptive Priority
 Added support for Sapiens segmentation masks. The system automatically

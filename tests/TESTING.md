@@ -79,7 +79,6 @@ dependencies.
 | `test_budget_allocation_k_sum` | Perception budget summation |
 | `test_budget_allocation_min_k` | Minimum k per segment check |
 | `test_albedo_guided_quantization_shift` | Albedo influence verification |
-| `test_normal_guided_slic_crease_preservation` | Normal map geometric alignment |
 | `test_fill_uses_region_colors_mapping` | Renderer color mapping accuracy |
 | `test_label_text_shows_paint_number` | Label text vs paint number check |
 | `test_label_contrast_uses_mapped_color` | Contrast visibility per region |
@@ -96,7 +95,6 @@ Tests that verify the full processing pipeline and the ComfyUI node class.
 | `test_image_processor_batch_simulation` | Processor reuse and consistency |
 | `test_pbn_node_execute` | V3 Node execution and output packing |
 | `test_pbn_node_output_modes` | Result rendering styles (colored, outline) |
-| `test_normals_integration` | Normal map influence on SLIC segmentation |
 | `test_lineart_integration` | Lineart bias on color quantization |
 | `test_combined_perception` | Stress test with all perception inputs |
 
