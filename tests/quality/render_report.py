@@ -8,6 +8,7 @@ import base64
 import os
 import sys
 from datetime import datetime
+from string import Template
 from typing import TypedDict
 
 import cv2
@@ -194,7 +195,7 @@ def generate_report(save_svgs=False, llm_reviewer: LLMReviewer | None = None):
     else:
         template = "<html><body><h1>Report Template Missing</h1>{{rows}}</body></html>"
 
-    html = template.format(
+    html = Template(template).safe_substitute(
         timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
         llm_header="<th>AI Visual Critique</th>" if llm_reviewer else "",
         rows="".join(rows),
