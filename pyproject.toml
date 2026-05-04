@@ -45,7 +45,6 @@ module = [
     "kneed.*",
     "comfy_api.*",
     "folder_paths",
-    "mediapipe.*",
     "bezier.*",
     "skimage.*",
     "scipy.*",

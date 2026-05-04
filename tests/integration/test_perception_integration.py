@@ -14,7 +14,6 @@ class TestPerceptionIntegration:
             image=sample_image_tensor,
             num_colors=4,
             simplification=1.0,
-            use_watershed=False,
             output_mode="colored",
             lineart=lineart,
             lineart_strength=0.9,
@@ -34,11 +33,9 @@ class TestPerceptionIntegration:
             image=sample_image_tensor,
             num_colors=8,
             simplification=1.0,
-            use_watershed=False,
             output_mode="colored",
             segmentation=segmentation,
             lineart=lineart,
-            use_content_protect=True,
         )
 
         assert output is not None

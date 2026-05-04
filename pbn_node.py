@@ -19,29 +19,24 @@ logger = logging.getLogger(__name__)
 # Preset configuration table
 PRESETS = {
     "fast": {
-        "use_slic": False,
         "use_ciede2000": True,
         "use_palette_merge": True,
         "use_bezier_smooth": False,
     },
     "balanced": {
-        "use_slic": True,
         "use_ciede2000": True,
         "use_palette_merge": True,
         "use_thin_cleanup": True,
         "use_shared_borders": True,
         "use_bezier_smooth": False,
-        "use_content_protect": False,
         "use_auto_albedo": True,
     },
     "portrait": {
-        "use_slic": True,
         "use_ciede2000": True,
         "use_palette_merge": True,
         "use_thin_cleanup": True,
         "use_shared_borders": True,
         "use_bezier_smooth": False,
-        "use_content_protect": True,
         "use_auto_albedo": True,
     },
 }
@@ -92,15 +87,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "Higher values create sharper boundaries at edges but may fragment regions."
                     ),
                 ),
-                io.Boolean.Input(
-                    "invert_lineart",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Enable if your preprocessor outputs white lines on black "
-                        "background (e.g., standard Canny)."
-                    ),
-                ),
                 io.Int.Input(
                     "num_colors",
                     default=24,
@@ -123,15 +109,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "Controls how 'wiggly' the lines are. Higher values (1.5+) make it "
                         "easier to paint but lose detail. Lower values (0.5-0.8) keep the "
                         "photo's shapes more accurately but are much harder to paint."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_watershed",
-                    default=False,
-                    tooltip=(
-                        "An alternative segmentation method. Use this if the default results "
-                        "in 'messy' shapes. It is slower but handles busy, complex backgrounds "
-                        "much better."
                     ),
                 ),
                 io.Combo.Input(
@@ -162,16 +139,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "Quick settings: 'portrait' protects faces; 'balanced' is a safe default; "
                         "'fast' is for quick previews. Use 'custom' to unlock the manual "
                         "advanced sliders below."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_slic",
-                    default=True,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Uses SLIC clustering to group pixels into natural, organic "
-                        "blocks. This usually creates more 'aesthetic' shapes than raw "
-                        "color-based grouping."
                     ),
                 ),
                 io.Boolean.Input(
@@ -249,15 +216,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "Gives the template a professional, hand-drawn look."
                     ),
                 ),
-                io.Boolean.Input(
-                    "use_content_protect",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Requires a segmentation map. It 'shields' the subject "
-                        "from being overly simplified, keeping it recognizable."
-                    ),
-                ),
                 io.Float.Input(
                     "subject_priority",
                     default=2.0,
@@ -298,56 +256,6 @@ class PaintByNumberNode(io.ComfyNode):
                         "external Albedo map is wired."
                     ),
                 ),
-                io.Boolean.Input(
-                    "use_auto_mask",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Automatically generates a segmentation mask for portrait "
-                        "protection when none is provided."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_painterly_preprocess",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Applies a 'painterly' filter to the image before processing. "
-                        "This helps simplify textures and can lead to cleaner color regions."
-                    ),
-                ),
-                io.Float.Input(
-                    "painterly_sigma_s",
-                    default=60.0,
-                    min=10.0,
-                    max=200.0,
-                    advanced=True,
-                    tooltip="(Advanced) Spatial sigma for the painterly filter.",
-                ),
-                io.Float.Input(
-                    "painterly_sigma_r",
-                    default=0.45,
-                    min=0.1,
-                    max=1.0,
-                    advanced=True,
-                    tooltip="(Advanced) Range sigma for the painterly filter.",
-                ),
-                io.Int.Input(
-                    "slic_n_segments",
-                    default=500,
-                    min=100,
-                    max=5000,
-                    advanced=True,
-                    tooltip="(Advanced) Number of superpixel segments for SLIC clustering.",
-                ),
-                io.Float.Input(
-                    "slic_compactness",
-                    default=10.0,
-                    min=0.01,
-                    max=100.0,
-                    advanced=True,
-                    tooltip="(Advanced) Compactness factor for SLIC clustering.",
-                ),
                 io.Int.Input(
                     "smoothing_kernel_size",
                     default=9,
@@ -384,7 +292,6 @@ class PaintByNumberNode(io.ComfyNode):
         image,
         num_colors=24,
         simplification=1.0,
-        use_watershed=False,
         output_mode="colored",
         preset="balanced",
         segmentation=None,
@@ -392,7 +299,6 @@ class PaintByNumberNode(io.ComfyNode):
         lineart_strength=0.7,
         invert_lineart=False,
         segmentation_format="auto",
-        use_slic=True,
         use_ciede2000=True,
         use_palette_merge=True,
         ciede2000_merge_thresh=10.0,
@@ -401,17 +307,10 @@ class PaintByNumberNode(io.ComfyNode):
         use_shared_borders=True,
         label_mode="polylabel",
         use_bezier_smooth=False,
-        use_content_protect=False,
         subject_priority=2.0,
         material_weight=0.5,
         edge_influence=0.3,
         use_auto_albedo=False,
-        use_auto_mask=False,
-        use_painterly_preprocess=False,
-        painterly_sigma_s=60.0,
-        painterly_sigma_r=0.45,
-        slic_n_segments=500,
-        slic_compactness=10.0,
         smoothing_kernel_size=9,
     ):
         # 1. Resolve Presets
@@ -419,7 +318,6 @@ class PaintByNumberNode(io.ComfyNode):
             "image": image,
             "num_colors": num_colors,
             "simplification": simplification,
-            "use_watershed": use_watershed,
             "output_mode": output_mode,
             "preset": preset,
             "segmentation": segmentation,
@@ -427,7 +325,6 @@ class PaintByNumberNode(io.ComfyNode):
             "lineart_strength": lineart_strength,
             "invert_lineart": invert_lineart,
             "segmentation_format": segmentation_format,
-            "use_slic": use_slic,
             "use_ciede2000": use_ciede2000,
             "use_palette_merge": use_palette_merge,
             "ciede2000_merge_thresh": ciede2000_merge_thresh,
@@ -436,17 +333,10 @@ class PaintByNumberNode(io.ComfyNode):
             "use_shared_borders": use_shared_borders,
             "label_mode": label_mode,
             "use_bezier_smooth": use_bezier_smooth,
-            "use_content_protect": use_content_protect,
             "subject_priority": subject_priority,
             "material_weight": material_weight,
             "edge_influence": edge_influence,
             "use_auto_albedo": use_auto_albedo,
-            "use_auto_mask": use_auto_mask,
-            "use_painterly_preprocess": use_painterly_preprocess,
-            "painterly_sigma_s": painterly_sigma_s,
-            "painterly_sigma_r": painterly_sigma_r,
-            "slic_n_segments": slic_n_segments,
-            "slic_compactness": slic_compactness,
             "smoothing_kernel_size": smoothing_kernel_size,
         }
         params = cls._resolve_presets(kwargs)
@@ -468,8 +358,6 @@ class PaintByNumberNode(io.ComfyNode):
         proc_params = ProcessingParameters(
             num_colors=n_colors_param if n_colors_param > 0 else None,
             simplification=params.get("simplification", 1.0),
-            use_watershed=params.get("use_watershed", False),
-            use_slic=params.get("use_slic", True),
             use_ciede2000=params.get("use_ciede2000", True),
             use_palette_merge=params.get("use_palette_merge", True),
             ciede2000_merge_thresh=params.get("ciede2000_merge_thresh", 10.0),
@@ -478,16 +366,10 @@ class PaintByNumberNode(io.ComfyNode):
             use_shared_borders=params.get("use_shared_borders", True),
             label_mode=params.get("label_mode", "polylabel"),
             use_bezier_smooth=params.get("use_bezier_smooth", False),
-            use_content_protect=params.get("use_content_protect", False),
             perception=perception,
             preset=params.get("preset", "balanced"),
             output_mode=params.get("output_mode", "colored"),
             use_auto_albedo=params.get("use_auto_albedo", False),
-            use_painterly_preprocess=params.get("use_painterly_preprocess", False),
-            painterly_sigma_s=params.get("painterly_sigma_s", 60.0),
-            painterly_sigma_r=params.get("painterly_sigma_r", 0.45),
-            slic_n_segments=params.get("slic_n_segments", 500),
-            slic_compactness=params.get("slic_compactness", 10.0),
             smoothing_kernel_size=params.get("smoothing_kernel_size", 9),
         )
 
@@ -556,8 +438,6 @@ class PaintByNumberNode(io.ComfyNode):
 
             if preset == "portrait":
                 params["use_auto_albedo"] = True
-                if kwargs.get("segmentation") is None:
-                    params["use_auto_mask"] = True
 
         return params
 
@@ -569,9 +449,7 @@ class PaintByNumberNode(io.ComfyNode):
             kwargs.get("segmentation"), kwargs.get("segmentation_format", "auto")
         )
 
-        use_auto_mask = params.get("use_auto_mask", False)
-
-        has_perception = any(x is not None for x in [segmentation_np, lineart_np]) or use_auto_mask
+        has_perception = any(x is not None for x in [segmentation_np, lineart_np])
 
         if not has_perception:
             return None
@@ -581,11 +459,9 @@ class PaintByNumberNode(io.ComfyNode):
             segmentation_mask=segmentation_np,
             lineart=lineart_np,
             lineart_strength=kwargs.get("lineart_strength", 0.7),
-            invert_lineart=kwargs.get("invert_lineart", False),
             subject_priority=kwargs.get("subject_priority", 2.0),
             material_weight=kwargs.get("material_weight", 0.5),
             edge_influence=kwargs.get("edge_influence", 0.3),
-            use_auto_mask=use_auto_mask,
         )
 
     @staticmethod

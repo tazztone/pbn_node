@@ -34,7 +34,6 @@ class ColorQuantizer:
         self.use_palette_merge = use_palette_merge
         self.ciede2000_merge_thresh = ciede2000_merge_thresh
         self.use_ciede2000 = use_ciede2000
-        self.protection_map: np.ndarray | None = None
 
     def _blend_with_albedo(
         self, pixels: np.ndarray, albedo: np.ndarray, material_weight: float, h: int, w: int
@@ -45,13 +44,6 @@ class ColorQuantizer:
         albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
         albedo_pixels = albedo_lab.reshape(-1, 3)
         return material_weight * albedo_pixels + (1.0 - material_weight) * pixels
-
-    def _get_otsu_mask(self, image: np.ndarray) -> np.ndarray:
-        """Generate a binary mask using Otsu thresholding on the Value channel."""
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        v_channel = hsv[:, :, 2]
-        _, mask = cv2.threshold(v_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return mask
 
     def _centers_to_palette(self, centers_lab: np.ndarray) -> ColorPalette:
         """Helper to convert LAB centers to ColorPalette object."""
@@ -88,11 +80,6 @@ class ColorQuantizer:
 
         # Add a small base weight
         weights = chroma + 10.0
-
-        if self.protection_map is not None:
-            pm_flat = self.protection_map.flatten()
-            if len(pm_flat) == len(weights):
-                weights *= pm_flat
 
         # Perform K-means clustering
         kmeans = KMeans(n_clusters=k, init="k-means++", max_iter=self.max_iterations, n_init=10, random_state=42)
@@ -298,8 +285,6 @@ class ColorQuantizer:
             k = self.auto_select_k(input_image)
 
         seg_mask = perception.segmentation_mask if perception else None
-        if seg_mask is None and perception and perception.use_auto_mask:
-            seg_mask = self._get_otsu_mask(input_image)
 
         if seg_mask is not None and num_colors is not None and num_colors >= 4:
             return self.quantize_with_budget(

@@ -27,8 +27,6 @@ results.
   to guide color quantization and boundary detection.
 - **Auto-albedo:** Integrated Retinex-based shadow removal to estimate clean
   material colors when external maps are missing.
-- **Sapiens Adaptive Priority:** Automatically prioritizes faces, hands, and
-  subject regions for higher detail preservation.
 - **Modular Backend:** A decoupled, test-driven architecture that ensures
   stability and allows for easy extension of processing stages.
 
@@ -74,8 +72,6 @@ The node accepts several configuration parameters to fine-tune the result.
   to `0` to enable automatic detection.
 - **simplification:** Controls how much the region contours are simplified.
   Accepted values range from `0.5` to `2.0`.
-- **use_watershed:** When enabled, uses the watershed transform for
-  segmentation. This is more accurate to the original photo but slower.
 - **output_mode:** Selects the visual style of the output image (**colored**,
   **outline**, or **quantized**).
 - **preset:** Quick configurations for different use cases (**fast**,
@@ -90,10 +86,6 @@ The node accepts several configuration parameters to fine-tune the result.
   `grayscale`, or `rgb_packed`).
 - **use_auto_albedo:** When enabled, automatically estimates a shadow-free
   albedo map if no external albedo is provided.
-- **use_auto_mask:** Automatically generates a face-protection mask for
-  portraits when no external segmentation is provided.
-- **use_painterly_preprocess:** Applies a stylization filter before processing
-  to simplify complex textures and produce cleaner shapes.
 
 ### Outputs
 

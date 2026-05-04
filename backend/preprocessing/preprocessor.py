@@ -64,42 +64,14 @@ class Preprocessor:
         # Convert back to BGR
         return cv2.cvtColor(lab_equalized, cv2.COLOR_LAB2BGR)
 
-    def detect_image_type(self, image: np.ndarray) -> str:
-        """
-        Detect image type (portrait vs landscape) by aspect ratio.
-
-        Args:
-            image: Input image
-
-        Returns:
-            "portrait" if height > width, "landscape" otherwise
-        """
-        height, width = image.shape[:2]
-        return "portrait" if height > width else "landscape"
-
     def preprocess(
         self,
         image: np.ndarray,
-        use_painterly: bool = False,
-        painterly_sigma_s: float = 60.0,
-        painterly_sigma_r: float = 0.45,
     ) -> np.ndarray:
         """
-        Complete preprocessing pipeline.
-
-        Args:
-            image: Input image (BGR format from cv2.imread)
-            use_painterly: Whether to apply painterly stylization
-            painterly_sigma_s: Spatial sigma for stylization
-            painterly_sigma_r: Range sigma for stylization
-
         Returns:
             Preprocessed image (BGR format)
         """
-        # Optional painterly pre-filter
-        if use_painterly:
-            image = cv2.stylization(image, sigma_s=painterly_sigma_s, sigma_r=painterly_sigma_r)
-
         # Apply bilateral filter
         filtered = self.bilateral_filter(image)
 

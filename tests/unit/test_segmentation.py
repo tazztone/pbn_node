@@ -28,7 +28,7 @@ def quantized_mock():
 @pytest.mark.unit
 def test_direct_color_segmentation(quantized_mock):
     img, colors = quantized_mock
-    segmenter = RegionSegmenter(use_watershed=False)
+    segmenter = RegionSegmenter()
     segmented, region_colors = segmenter.direct_color_segmentation(img, colors)
 
     assert segmented.shape == (100, 100)
@@ -54,7 +54,7 @@ def test_build_adjacency_graph():
 @pytest.mark.unit
 def test_segment_pipeline(quantized_mock):
     img, colors = quantized_mock
-    segmenter = RegionSegmenter(use_watershed=False)
+    segmenter = RegionSegmenter()
     region_data = segmenter.segment(img, colors)
 
     assert len(region_data.regions) > 0

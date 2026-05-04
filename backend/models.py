@@ -19,12 +19,10 @@ class PerceptionInputs:
     segmentation_mask: np.ndarray | None = None
     lineart: np.ndarray | None = None  # [H,W] float32 [0,1] edge weight map
     lineart_strength: float = 0.7  # segmentation boundary hardness [0,1]
-    invert_lineart: bool = False
     background_ids: list[int] = field(default_factory=lambda: [0])
     subject_priority: float = 2.0
     edge_influence: float = 0.3  # quantizer: weight of lineart edges on albedo blend [0,1]
     material_weight: float = 0.5  # Blend factor between albedo and original photo
-    use_auto_mask: bool = False  # Whether to generate an Otsu mask if segmentation_mask is None
 
     def __post_init__(self):
         if not (0.0 <= self.material_weight <= 1.0):
@@ -43,10 +41,8 @@ class ProcessingParameters:
 
     num_colors: int | None = None  # None for auto-detection
     simplification: float = 1.0  # 0.5-2.0 pixel tolerance
-    use_watershed: bool = False  # Whether to use watershed segmentation (slower but original spec)
 
     # Advanced parameters
-    use_slic: bool = True
     use_ciede2000: bool = True
     use_palette_merge: bool = True
     ciede2000_merge_thresh: float = 8.0
@@ -55,16 +51,10 @@ class ProcessingParameters:
     use_shared_borders: bool = True
     label_mode: Literal["centroid", "polylabel"] = "polylabel"
     use_bezier_smooth: bool = False
-    use_content_protect: bool = False
-    slic_n_segments: int = 500
-    slic_compactness: float = 10.0
     perception: PerceptionInputs | None = None
     preset: str = "balanced"
     output_mode: str = "colored"
     use_auto_albedo: bool = False
-    use_painterly_preprocess: bool = False
-    painterly_sigma_s: float = 60.0
-    painterly_sigma_r: float = 0.45
     smoothing_kernel_size: int = 9
 
     def __post_init__(self):
@@ -75,10 +65,6 @@ class ProcessingParameters:
             raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
         if not (2 <= self.min_region_width <= 20):
             raise ValueError("min_region_width must be between 2 and 20")
-        if not (100 <= self.slic_n_segments <= 5000):
-            raise ValueError("slic_n_segments must be between 100 and 5000")
-        if not (0.01 <= self.slic_compactness <= 100.0):
-            raise ValueError("slic_compactness must be between 0.01 and 100.0")
         if self.num_colors is not None and self.num_colors < 2:
             raise ValueError("num_colors must be at least 2 if provided")
 

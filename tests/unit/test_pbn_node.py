@@ -21,7 +21,6 @@ class TestPaintByNumberNode:
                 image=sample_image_tensor,
                 num_colors=4,
                 simplification=1.0,
-                use_watershed=False,
                 output_mode="colored",
             )
 
@@ -71,14 +70,12 @@ class TestPaintByNumberNode:
                     image=sample_image_tensor,
                     num_colors=4,
                     simplification=1.0,
-                    use_watershed=False,
                     output_mode="colored",
                 )
                 out2 = PaintByNumberNode.execute(
                     image=sample_image_tensor,
                     num_colors=4,
                     simplification=1.0,
-                    use_watershed=False,
                     output_mode="colored",
                 )
 

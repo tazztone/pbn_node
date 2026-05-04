@@ -14,7 +14,6 @@ def test_pbn_node_execute(sample_image_tensor):
         image=sample_image_tensor,
         num_colors=5,
         simplification=1.0,
-        use_watershed=False,
         output_mode="colored",
     )
 
@@ -40,7 +39,6 @@ def test_pbn_node_output_modes(sample_image_tensor):
             image=sample_image_tensor,
             num_colors=5,
             simplification=1.0,
-            use_watershed=False,
             output_mode=mode,
         )
         assert result[0] is not None

@@ -7,7 +7,7 @@ from pbn_node.pbn_pipeline import ImageProcessor
 @pytest.mark.integration
 def test_image_processor_full_run(sample_image_np):
     processor = ImageProcessor()
-    params = ProcessingParameters(num_colors=5, simplification=1.0, use_watershed=False)
+    params = ProcessingParameters(num_colors=5, simplification=1.0)
 
     result = processor.process_array(sample_image_np, params)
 

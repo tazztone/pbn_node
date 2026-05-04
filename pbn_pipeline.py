@@ -4,15 +4,11 @@ import time
 
 import cv2
 import numpy as np
-import skimage.color
-import skimage.segmentation
 
 from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
 from .backend.preprocessing.preprocessor import Preprocessor
-from .backend.preprocessing.protector import Protector
 from .backend.preprocessing.retinex import multiscale_retinex
-from .backend.preprocessing.sapiens_priority import build_priority_map
 from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
@@ -32,14 +28,6 @@ class ImageProcessor:
         self.preprocessor = Preprocessor()
         self.quantizer = ColorQuantizer()
         self.svg_generator = SVGGenerator()
-        self._protector = None
-
-    @property
-    def protector(self):
-        """Lazy-load the Protector to avoid heavy imports (mediapipe) if not used."""
-        if self._protector is None:
-            self._protector = Protector()
-        return self._protector
 
     def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None) -> SVGResult:
         """
@@ -62,12 +50,7 @@ class ImageProcessor:
             logger.info("Stage 1/6: Preprocessing image")
             if api:
                 api.execution.set_progress(1, 6)
-            preprocessed = self.preprocessor.preprocess(
-                image_bgr,
-                use_painterly=p.use_painterly_preprocess,
-                painterly_sigma_s=p.painterly_sigma_s,
-                painterly_sigma_r=p.painterly_sigma_r,
-            )
+            preprocessed = self.preprocessor.preprocess(image_bgr)
 
             # Stage 2: Content Protection & Perception
             logger.info("Stage 2/6: Analyzing image perception")
@@ -81,37 +64,7 @@ class ImageProcessor:
             edge_map = lineart_map
             edge_strength = lineart_strength
 
-            # Generate protection map if enabled
-            protection_map = None
-            if p.use_content_protect:
-                logger.info("Generating content protection map")
-                protection_map = self.protector.generate_protection_map(preprocessed)
-
-            if perception and perception.segmentation_mask is not None:
-                if perception.segmentation_mask.ndim == 2:  # grayscale class map
-                    priority_map = build_priority_map(perception.segmentation_mask)
-                    # Merge with any existing protection map
-                    if protection_map is not None:
-                        protection_map = protection_map * priority_map
-                    else:
-                        protection_map = priority_map
-
-            # Apply SLIC superpixels if enabled
-            if p.use_slic:
-                # Standard RGB SLIC
-                rgb_image = cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB)
-                segments = skimage.segmentation.slic(
-                    rgb_image,
-                    n_segments=p.slic_n_segments,
-                    compactness=p.slic_compactness,
-                    start_label=1,
-                )
-
-                input_for_quantization = skimage.color.label2rgb(
-                    segments, preprocessed, kind="avg", bg_label=-1
-                ).astype(np.uint8)
-            else:
-                input_for_quantization = preprocessed
+            input_for_quantization = preprocessed
 
             # Stage 3: Color Quantization
             logger.info("Stage 3/6: Quantizing image colors")
@@ -122,7 +75,6 @@ class ImageProcessor:
             self.quantizer.use_palette_merge = p.use_palette_merge
             self.quantizer.ciede2000_merge_thresh = p.ciede2000_merge_thresh
             self.quantizer.use_ciede2000 = p.use_ciede2000
-            self.quantizer.protection_map = protection_map
 
             # Auto-albedo: estimate albedo via MSR if enabled
             if p.use_auto_albedo:
@@ -142,7 +94,6 @@ class ImageProcessor:
                 api.execution.set_progress(4, 6)
 
             segmenter = RegionSegmenter(
-                use_watershed=p.use_watershed,
                 use_ciede2000=p.use_ciede2000,
                 use_thin_cleanup=p.use_thin_cleanup,
                 min_region_width=p.min_region_width,

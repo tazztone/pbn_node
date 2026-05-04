@@ -1,5 +1,5 @@
 """
-Region segmentation module implementing watershed transform and shared border segmentation.
+Region segmentation module implementing direct color segmentation and shared border segmentation.
 """
 
 from collections import deque
@@ -23,7 +23,6 @@ class RegionSegmenter:
 
     def __init__(
         self,
-        use_watershed: bool = False,
         use_ciede2000: bool = True,
         use_thin_cleanup: bool = True,
         min_region_width: int = 5,
@@ -35,41 +34,15 @@ class RegionSegmenter:
         Initialize segmenter with configuration options.
 
         Args:
-            use_watershed: Whether to use watershed transform
-            use_ciede2000: Whether to use CIEDE2000 color distance
-            use_thin_cleanup: Whether to merge thin regions
-            min_region_width: Minimum width for a region to survive
-            edge_weight_map: Optional edge map (e.g. lineart) to guide segmentation
             lineart_strength: How much to trust the edge map [0, 1]
         """
         self.min_distance = 10  # Minimum distance for peak detection
-        self.use_watershed = use_watershed
         self.use_ciede2000 = use_ciede2000
         self.use_thin_cleanup = use_thin_cleanup
         self.min_region_width = min_region_width
         self.edge_weight_map = edge_weight_map
         self.lineart_strength = lineart_strength
         self.smoothing_kernel_size = smoothing_kernel_size
-
-    def watershed_transform(self, quantized: np.ndarray, markers: np.ndarray) -> np.ndarray:
-        """
-        Apply watershed segmentation with cluster centers as markers.
-
-        Args:
-            quantized: Quantized image (BGR format)
-            markers: Marker image with labeled regions
-
-        Returns:
-            Segmented regions as labeled image
-        """
-        # Apply watershed
-        markers_copy = markers.copy()
-        cv2.watershed(quantized, markers_copy)
-
-        # Watershed marks boundaries as -1, convert to 0
-        markers_copy[markers_copy == -1] = 0
-
-        return markers_copy.astype(np.int32)
 
     def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
         """
@@ -503,41 +476,8 @@ class RegionSegmenter:
         # Initialize region colors mapping
         region_colors: dict[int, int] = {}
 
-        if self.use_watershed:
-            # Original watershed implementation
-            h, w = quantized.shape[:2]
-            markers = np.zeros((h, w), dtype=np.int32)
-            next_marker_id = 1
-
-            # Get unique colors in the quantized image
-            quantized_2d = quantized.reshape(-1, 3)
-            unique_colors_bgr = np.unique(quantized_2d, axis=0)
-
-            # Convert unique BGR colors to LAB for matching with cluster centers
-            unique_colors_lab = cv2.cvtColor(unique_colors_bgr.reshape(1, -1, 3), cv2.COLOR_BGR2LAB).reshape(-1, 3)
-
-            # For each cluster center, find the closest quantized color
-            for i, center_lab in enumerate(colors):
-                distances = np.sum((unique_colors_lab - center_lab) ** 2, axis=1)
-                closest_idx = np.argmin(distances)
-                closest_color_bgr = unique_colors_bgr[closest_idx]
-
-                # Create mask for pixels of this color
-                color_mask = np.all(quantized == closest_color_bgr, axis=2).astype(np.uint8)
-
-                # Find connected components for this color to give each island a unique marker
-                num_labels, labels_im = cv2.connectedComponents(color_mask)
-
-                for label in range(1, num_labels):
-                    markers[labels_im == label] = next_marker_id
-                    region_colors[next_marker_id] = i
-                    next_marker_id += 1
-
-            # Apply watershed transform
-            segmented = self.watershed_transform(quantized, markers)
-        else:
-            # Direct color segmentation - faster alternative
-            segmented, region_colors = self.direct_color_segmentation(quantized, colors)
+        # Direct color segmentation - faster alternative
+        segmented, region_colors = self.direct_color_segmentation(quantized, colors)
 
         # Build adjacency graph
         adjacency_graph = self.build_adjacency_graph(segmented)

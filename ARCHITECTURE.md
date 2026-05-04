@@ -13,16 +13,15 @@ a printable paint-by-number SVG template.
 3. [Data Models](#3-data-models)
 4. [Pipeline Stages](#4-pipeline-stages)
    - [Stage 1 — Preprocessing](#stage-1--preprocessing)
-   - [Stage 2 — Perception & Protection](#stage-2--perception--protection)
+   - [Stage 2 — Perception](#stage-2--perception)
    - [Stage 3 — Color Quantization](#stage-3--color-quantization)
    - [Stage 4 — Region Segmentation](#stage-4--region-segmentation)
    - [Stage 5 — Vectorization](#stage-5--vectorization)
    - [Stage 6 — Label Placement & SVG Generation](#stage-6--label-placement--svg-generation)
-5. [Perception Stack](#5-perception-stack)
-6. [ComfyUI Integration Layer](#6-comfyui-integration-layer)
-7. [Rendering Layer](#7-rendering-layer)
-8. [Testing Infrastructure](#8-testing-infrastructure)
-9. [Dependency Map](#9-dependency-map)
+5. [ComfyUI Integration Layer](#5-comfyui-integration-layer)
+6. [Rendering Layer](#6-rendering-layer)
+7. [Testing Infrastructure](#7-testing-infrastructure)
+8. [Dependency Map](#8-dependency-map)
 
 ---
 
@@ -80,16 +79,14 @@ pbn_node/
 │   ├── models.py             # ALL shared data contracts (dataclasses)
 │   │
 │   ├── preprocessing/
-│   │   ├── preprocessor.py       # Painterly bilateral filter
+│   │   ├── preprocessor.py       # Bilateral filter
 │   │   ├── retinex.py            # Multiscale Retinex (auto-albedo)
-│   │   ├── protector.py          # Mediapipe face/hand protection maps
-│   │   └── sapiens_priority.py   # Body-part priority weight maps
 │   │
 │   ├── quantization/
 │   │   └── quantizer.py          # K-means + CIEDE2000 palette merge
 │   │
 │   ├── segmentation/
-│   │   └── segmenter.py          # Watershed / majority-filter region building
+│   │   └── segmenter.py          # Majority-filter region building
 │   │
 │   ├── vectorization/
 │   │   └── vectorizer.py         # Contour tracing, Bézier smoothing, speckle removal
@@ -122,7 +119,7 @@ this file defines shared data structures; stages import only from here.
 | Dataclass | Owner | Purpose |
 |---|---|---|
 | `PerceptionInputs` | Input to pipeline | Container for all optional perception priors: albedo, segmentation mask, lineart, and their influence weights |
-| `ProcessingParameters` | Input to pipeline | All scalar configuration — `num_colors`, `use_watershed`, presets, smoothing kernel size, etc. |
+| `ProcessingParameters` | Input to pipeline | All scalar configuration — `num_colors`, presets, smoothing kernel size, etc. |
 | `ColorPalette` | Stage 3 → 4, 5, 6 | LAB color array, hex strings, and total color count |
 | `RegionData` | Stage 4 → 5 | `{region_id: Polygon}`, color index map, shared border `LineString` dict, adjacency `nx.Graph` |
 | `LabelData` | Stage 6 | `{region_id: Point}` positions, per-region font sizes, and the set of regions too small to label |
@@ -144,28 +141,13 @@ hook.
 
 **Module:** `backend/preprocessing/preprocessor.py`
 
-When `use_painterly_preprocess=True`, a bilateral (edge-preserving) filter is
-applied using OpenCV's `stylization` with configurable `sigma_s` and `sigma_r`.
+A bilateral (edge-preserving) filter is applied using OpenCV's `bilateralFilter`.
 This flattens fine textures (skin pores, grass noise) while keeping structural
 edges crisp, making the downstream color quantizer work on a cleaner signal.
-When disabled, the raw BGR image is passed through unchanged.
+The raw BGR image is passed through this filter by default.
 
-### Stage 2 — Perception & Protection
+### Stage 2 — Perception
 
-**Modules:** `preprocessor.py`, `protector.py`, `sapiens_priority.py`
-
-This stage assembles all optional prior information into a single upstream
-influence map before quantization. Two sub-systems run here:
-
-- **Content protection map** (`protector.py`): When `use_content_protect=True`,
-  Mediapipe detects faces and hands and produces a float weight map. High-weight
-  pixels receive extra color budget during quantization. `Protector` is
-  lazy-loaded to avoid importing Mediapipe when not needed.
-
-- **Sapiens priority map** (`sapiens_priority.py`): When a semantic segmentation
-  mask is provided as a 2D grayscale class map (e.g., from Sapiens), this
-  module converts class IDs to per-pixel priority weights. The resulting map is
-  multiplied with the protection map if both are active.
 
 ### Stage 3 — Color Quantization
 
@@ -196,16 +178,10 @@ palette colors.
 **Module:** `backend/segmentation/segmenter.py`
 
 Contiguous same-color blobs in the quantized image are identified and converted
-to Shapely `Polygon` objects. Two segmentation strategies are available,
-controlled by `use_watershed`:
-
-- **Default (majority filter)**: A vectorized majority-vote kernel
-  (`smoothing_kernel_size × smoothing_kernel_size`) replaces each pixel's color
-  with the most common color in its neighbourhood. This is fast and produces
-  smooth, painterly regions.
-- **Watershed**: Uses OpenCV's marker-based watershed transform for higher
-  fidelity to the original photo's shapes. Slower but better for complex,
-  textured backgrounds.
+to Shapely `Polygon` objects. A vectorized majority-vote kernel
+(`smoothing_kernel_size × smoothing_kernel_size`) replaces each pixel's color
+with the most common color in its neighbourhood. This is fast and produces
+smooth, painterly regions.
 
 In both cases, `lineart_map` and `lineart_strength` are passed to the segmenter.
 The lineart edge weights act as a hard barrier in the smoothing kernel,
@@ -265,7 +241,7 @@ stage with a different mechanism:
 | Prior | Input field | Stage | Mechanism | Key constraint |
 |---|---|---|---|---|
 | **Segmentation mask** | `segmentation` | Stage 3 | Splits color budget per region; builds priority map | Grayscale class map or RGB-packed |
-| **Lineart / edge map** | `lineart` | Stage 3 + 4 | Biases quantizer centroids; acts as barrier in smoothing kernel | Any single-channel edge map; `invert_lineart` to flip polarity |
+| **Lineart / edge map** | `lineart` | Stage 3 + 4 | Biases quantizer centroids; acts as barrier in smoothing kernel | Any single-channel edge map |
 | **Albedo** | Internal / auto | Stage 3 | Blends shadow-free color estimate into quantizer input | Auto-computed via Retinex when `use_auto_albedo=True` |
 
 These inputs are decoded from ComfyUI tensors in `pbn_node.py` and bundled
@@ -274,7 +250,7 @@ is passed to the pipeline and all perception-dependent branches are skipped.
 
 ---
 
-## 6. ComfyUI Integration Layer
+## 5. ComfyUI Integration Layer
 
 **File:** `pbn_node.py`
 
@@ -302,7 +278,7 @@ directly in the node body.
 
 ---
 
-## 7. Rendering Layer
+## 6. Rendering Layer
 
 **File:** `pbn_renderer.py`
 
@@ -322,7 +298,7 @@ vector outputs can evolve independently.
 
 ---
 
-## 8. Testing Infrastructure
+## 7. Testing Infrastructure
 
 **Directory:** `tests/`
 
@@ -346,20 +322,16 @@ Tests are split into two layers:
 
 ---
 
-## 9. Dependency Map
+## 8. Dependency Map
 
 ```
 pbn_node.py
   └── pbn_pipeline.py (ImageProcessor)
         ├── backend/models.py
         ├── backend/preprocessing/preprocessor.py
-        │     └── cv2 (stylization)
+        │     └── cv2
         ├── backend/preprocessing/retinex.py
         │     └── numpy, cv2
-        ├── backend/preprocessing/protector.py          [lazy-loaded]
-        │     └── mediapipe
-        ├── backend/preprocessing/sapiens_priority.py
-        │     └── numpy
         ├── backend/quantization/quantizer.py
         │     └── numpy, sklearn (KMeans), skimage (deltaE_ciede2000)
         ├── backend/segmentation/segmenter.py
@@ -380,7 +352,3 @@ pbn_node.py (external deps)
 
 Core scientific stack: `numpy`, `opencv-python`, `scikit-image`, `scikit-learn`,
 `scipy`, `shapely`, `networkx`.
-
-Optional heavy dependency: `mediapipe` (only imported when
-`use_content_protect=True` or `use_auto_mask=True`, via lazy `Protector`
-instantiation in `ImageProcessor`).

@@ -14,8 +14,8 @@ perception-aware and content-aware system.
 |---|---|---|---|---|---|
 | 1 | **CIEDE2000** | 🟢 High | 🟢 Trivial | ✅ Done | ★★★★★ |
 | 2 | **Shared Border SVG wiring** | 🟢 High | 🟢 Low | ✅ Done | ★★★★★ |
-| 3 | **SLIC Superpixels** | 🟡 Medium-high | 🟢 Low | ✅ Done | ★★★★☆ |
-| 4 | **Content-Aware Preprocessing** | 🟢 High (portraits) | 🟡 Moderate | ✅ Done | ★★★★☆ |
+| 3 | **SLIC Superpixels** | 🟡 Medium-high | 🟢 Low | 🗑️ Decomm. | ★★★★☆ |
+| 4 | **Content-Aware Preprocessing** | 🟢 High (portraits) | 🟡 Moderate | 🗑️ Decomm. | ★★★★☆ |
 | 5 | **SVG Vector Preview** | 🟡 Medium | 🟢 Low | ✅ Done | ★★★★☆ |
 | 6 | **Region numbering by color** | 🔴 Critical bug | 🟢 Low | ✅ Done | ★★★★★ |
 | 7 | **Pairwise palette merge** | 🟢 High | 🟢 Low | ✅ Done | ★★★★★ |
@@ -30,7 +30,7 @@ perception-aware and content-aware system.
 | 16 | **Label Collision Avoidance** | 🟡 UX | 🟡 Moderate | 📅 Planned | ★★★☆☆ |
 | 17 | **Exposed Clean-up Controls** | 🟢 Quality | 🟢 Trivial | 📅 Planned | ★★★★☆ |
 | 18 | **Interactive Palette Controls**| 🟡 UX only | 🟠 Hard (frontend)| 📅 Planned | ★★★☆☆ |
-| 19 | **Sapiens / Normal SLIC** | 🟢 Transformative | 🟡 Moderate | ✅ Done | ★★★★☆ |
+| 19 | **Sapiens / Normal SLIC** | 🟢 Transformative | 🟡 Moderate | 🗑️ Decomm. | ★★★★☆ |
 | 20 | **Modular Backend Refactor** | 🟢 Maintainability | 🟡 Moderate | ✅ Done | ★★★★★ |
 
 ---
@@ -49,12 +49,12 @@ The SVG generator now uses shared borders instead of independent contours for
 each region. This eliminates the "white-gap" problem and produces perfectly
 aligned vector paths.
 
-### SLIC superpixels
+### SLIC superpixels (Decommissioned)
 Integrated `skimage.segmentation.slic()` into the pipeline to reduce pixel space
 to compact cells before clustering. This dramatically reduces speckle and
 isolates the quantizer from noise.
 
-### Content-aware protection (Face detection)
+### Content-aware protection (Decommissioned)
 Implemented Mediapipe-based face detection to generate protection maps. This
 ensures high-frequency details in portraits are preserved during color
 quantization.
@@ -101,12 +101,12 @@ Implemented a multi-segment quantization pipeline that uses an external
 segmentation mask (or an automatic Otsu-based fallback) to allocate independent
 color budgets to different image regions.
 
-### Normal-Map-Guided SLIC
+### Normal-Map-Guided SLIC (Decommissioned)
 Integrated 3D geometry into the segmentation pipeline. Superpixel boundaries
 now respect physical surface creases even in low-contrast areas by leveraging
 angular gradients and edges from lineart maps.
 
-### Sapiens Body-Part Adaptive Priority
+### Sapiens Body-Part Adaptive Priority (Decommissioned)
 Added support for Sapiens segmentation masks. The system automatically
 identifies anatomical body parts and applies adaptive priority weights to the
 color quantization and protection maps.

@@ -1,20 +1,6 @@
-import numpy as np
 import pytest
 
 from pbn_node.backend.preprocessing.preprocessor import Preprocessor
-
-
-@pytest.mark.unit
-def test_detect_image_type():
-    preprocessor = Preprocessor()
-
-    # Landscape
-    img_landscape = np.zeros((100, 200, 3), dtype=np.uint8)
-    assert preprocessor.detect_image_type(img_landscape) == "landscape"
-
-    # Portrait
-    img_portrait = np.zeros((200, 100, 3), dtype=np.uint8)
-    assert preprocessor.detect_image_type(img_portrait) == "portrait"
 
 
 @pytest.mark.unit
