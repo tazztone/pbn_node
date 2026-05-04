@@ -35,7 +35,7 @@ perception-aware and content-aware system.
 
 ---
 
-## ✅ Completed features
+## Completed features
 
 These features have been implemented and are available in the current version.
 
@@ -119,7 +119,9 @@ test suite to 35 comprehensive unit and integration tests.
 
 ---
 
-## 🚀 Planned features
+## Planned features
+
+This section lists features that are scheduled for implementation.
 
 ### Palette chart output
 
@@ -141,6 +143,7 @@ region placed by tiling polylabel calls on eroded sub-regions.
 - **Impact:** Medium. Requires `LabelData` interface change.
 
 ---
+
 
 ### Perceptual palette sorting
 

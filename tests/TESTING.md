@@ -101,6 +101,8 @@ Tests that verify the full processing pipeline and the ComfyUI node class.
 
 ## Test markers
 
+Markers help you filter tests by scope.
+
 You can run tests by their defined markers to focus on specific scopes.
 
 ```bash

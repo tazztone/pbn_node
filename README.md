@@ -56,17 +56,16 @@ To install the node, follow these steps. Note that this project requires Python
 ## Usage
 
 You can find the node in the ComfyUI menu under **image** > **process** >
-**Paint By Number**. It integrates seamlessly with other image processing
-nodes.
+**Paint By Number**. It integrates with other image processing nodes.
 
 ### Inputs
 
-The node accepts several configuration parameters to fine-tune the result.
+The node accepts configuration parameters to fine-tune the result.
 
 - **image:** The input image tensor you want to process.
 - **segmentation:** Optional segmentation or mask image. When provided, the node
   allocates color budgets proportionally to the detected regions.
-- **lineart:** Optional edge map (e.g., from Canny or HED). This prevents color
+- **lineart:** Optional edge map (for example, from Canny or HED). This prevents color
   regions from bleeding across semantic boundaries.
 - **num_colors:** The number of color clusters to use (default: 24). Set this
   to `0` to enable automatic detection.
@@ -146,6 +145,7 @@ For more details on the testing infrastructure, see
 [tests/TESTING.md](tests/TESTING.md).
 
 ## License
+
 
 This project is licensed under the MIT License. See the `LICENSE` file for
 details.

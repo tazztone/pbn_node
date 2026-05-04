@@ -6,26 +6,9 @@ a printable paint-by-number SVG template.
 
 ---
 
-## Table of Contents
 
-1. [High-Level Overview](#1-high-level-overview)
-2. [Repository Layout](#2-repository-layout)
-3. [Data Models](#3-data-models)
-4. [Pipeline Stages](#4-pipeline-stages)
-   - [Stage 1 — Preprocessing](#stage-1--preprocessing)
-   - [Stage 2 — Perception](#stage-2--perception)
-   - [Stage 3 — Color Quantization](#stage-3--color-quantization)
-   - [Stage 4 — Region Segmentation](#stage-4--region-segmentation)
-   - [Stage 5 — Vectorization](#stage-5--vectorization)
-   - [Stage 6 — Label Placement & SVG Generation](#stage-6--label-placement--svg-generation)
-5. [ComfyUI Integration Layer](#5-comfyui-integration-layer)
-6. [Rendering Layer](#6-rendering-layer)
-7. [Testing Infrastructure](#7-testing-infrastructure)
-8. [Dependency Map](#8-dependency-map)
+## High-level overview
 
----
-
-## 1. High-Level Overview
 
 The pipeline follows a strict **linear, single-pass** architecture. Each stage
 consumes the output of the previous stage and produces a well-typed dataclass
@@ -65,7 +48,8 @@ Preproc.  Perception  Quantize  Segment  Vectorize  Label+SVG
 
 ---
 
-## 2. Repository Layout
+## Repository layout
+
 
 ```
 pbn_node/
@@ -111,7 +95,8 @@ pbn_node/
 
 ---
 
-## 3. Data Models
+## Data models
+
 
 All inter-stage contracts are defined in `backend/models.py`. Nothing outside
 this file defines shared data structures; stages import only from here.
@@ -131,13 +116,16 @@ pipeline.
 
 ---
 
-## 4. Pipeline Stages
+## Pipeline stages
+
 
 `ImageProcessor.process_array()` in `pbn_pipeline.py` executes all six stages
 sequentially, reporting progress via the ComfyUI V3 `api.execution.set_progress`
 hook.
 
 ### Stage 1 — Preprocessing
+
+This stage flattens the input signal before clustering.
 
 **Module:** `backend/preprocessing/preprocessor.py`
 
@@ -148,8 +136,13 @@ The raw BGR image is passed through this filter by default.
 
 ### Stage 2 — Perception
 
+This stage assembles optional prior information like lineart or segmentation
+masks to guide the pipeline.
+
 
 ### Stage 3 — Color Quantization
+
+This stage reduces the image to a target palette.
 
 **Module:** `backend/quantization/quantizer.py`
 
@@ -175,6 +168,8 @@ palette colors.
 
 ### Stage 4 — Region Segmentation
 
+This stage converts the quantized raster into discrete geometry.
+
 **Module:** `backend/segmentation/segmenter.py`
 
 Contiguous same-color blobs in the quantized image are identified and converted
@@ -195,6 +190,8 @@ the adjacency graph.
 
 ### Stage 5 — Vectorization
 
+This stage traces and simplifies region contours.
+
 **Module:** `backend/vectorization/vectorizer.py`
 
 Each region's pixel mask is traced into an ordered contour using OpenCV, then
@@ -209,7 +206,10 @@ orchestrator.
 
 Output: `cleaned_regions` dict and an updated `region_colors` mapping.
 
-### Stage 6 — Label Placement & SVG Generation
+### Stage 6 — Label placement and SVG generation
+
+
+This final stage determines label positions and assembles the vector document.
 
 **Modules:** `backend/labeling/label_placer.py`,
 `backend/svg_generation/svg_generator.py`
@@ -250,7 +250,8 @@ is passed to the pipeline and all perception-dependent branches are skipped.
 
 ---
 
-## 5. ComfyUI Integration Layer
+## ComfyUI integration layer
+
 
 **File:** `pbn_node.py`
 
@@ -278,7 +279,8 @@ directly in the node body.
 
 ---
 
-## 6. Rendering Layer
+## Rendering layer
+
 
 **File:** `pbn_renderer.py`
 
@@ -298,7 +300,8 @@ vector outputs can evolve independently.
 
 ---
 
-## 7. Testing Infrastructure
+## Testing infrastructure
+
 
 **Directory:** `tests/`
 
@@ -322,7 +325,8 @@ Tests are split into two layers:
 
 ---
 
-## 8. Dependency Map
+## Dependency map
+
 
 ```
 pbn_node.py
