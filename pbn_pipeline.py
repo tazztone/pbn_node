@@ -50,7 +50,7 @@ class ImageProcessor:
             logger.info("Stage 1/6: Preprocessing image")
             if api:
                 api.execution.set_progress(1, 6)
-            preprocessed = self.preprocessor.preprocess(image_bgr)
+            preprocessed = self.preprocessor.preprocess(image_bgr, use_clahe=p.use_clahe)
 
             # Stage 2: Content Protection & Perception
             logger.info("Stage 2/6: Analyzing image perception")
@@ -111,13 +111,8 @@ class ImageProcessor:
             vectorizer = Vectorizer(use_bezier_smooth=p.use_bezier_smooth)
             vectorized_regions = vectorizer.vectorize(region_data, p.simplification)
 
-            logger.info("Removing speckles")
-            cleaned_regions, updated_region_colors = vectorizer.remove_speckles(
-                vectorized_regions,
-                dict(region_data.region_colors),
-                palette.colors,
-                threshold=vectorizer.speckle_threshold,
-            )
+            cleaned_regions = vectorized_regions
+            updated_region_colors = dict(region_data.region_colors)
 
             # Renumber regions to have consecutive IDs (1, 2, 3, ...)
             cleaned_regions, renumbered_colors = self._renumber_regions(cleaned_regions, updated_region_colors)
@@ -170,10 +165,10 @@ class ImageProcessor:
                             # In PBN, polygons are usually touching, not nested.
                             pass
 
-            # If there are any unfilled pixels (black), fill them with the original quantized image
-            # as a fallback, though vectorized regions should cover the whole image.
-            mask = np.all(final_preview == 0, axis=2)
-            final_preview[mask] = quantized[mask]
+            # If there are any unfilled pixels (black), they remain black.
+            # This provides an honest view of polygon coverage gaps.
+            # mask = np.all(final_preview == 0, axis=2)
+            # final_preview[mask] = [0, 0, 0]
 
             processing_time = time.time() - start_time
 

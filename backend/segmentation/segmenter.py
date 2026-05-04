@@ -57,12 +57,15 @@ class RegionSegmenter:
         # Step 1: Convert quantized BGR image to color ID matrix
         color_id_matrix = self._create_color_id_matrix(quantized, colors)
 
-        # Step 2: Apply light smoothing to remove pixel-level quantization noise
-        # We use a 3x3 median filter which is excellent at removing 'speckle' noise
-        # while strictly preserving region boundaries (unlike Gaussian blur).
+        # Step 2: Apply multi-pass median filter to remove pixel-level quantization noise
+        # Using multiple passes with increasing kernel sizes is much more effective
+        # for images of varying resolutions than a single 3x3 pass.
         if color_id_matrix.max() < 256:
             # OpenCV medianBlur requires uint8 or float32
-            color_id_matrix = cv2.medianBlur(color_id_matrix.astype(np.uint8), 3).astype(np.int32)
+            color_id_matrix = color_id_matrix.astype(np.uint8)
+            for k in [3, 5, 7]:
+                color_id_matrix = cv2.medianBlur(color_id_matrix, k)
+            color_id_matrix = color_id_matrix.astype(np.int32)
 
         # Step 3: Apply vectorized majority filter (smoothing)
         smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
@@ -209,7 +212,12 @@ class RegionSegmenter:
             return mat
 
         counts = np.zeros((len(unique_ids), h, w), dtype=np.float32)
-        k_size = self.smoothing_kernel_size
+
+        # Calculate dynamic kernel size: ~1% of image diagonal, min 9
+        # This ensures smoothing scales correctly with resolution.
+        diagonal = int(np.sqrt(h**2 + w**2))
+        k_size = max(9, (diagonal // 100) | 1)  # ensure odd
+
         kernel = np.ones((k_size, k_size), dtype=np.float32)
 
         # Build per-pixel attenuation from lineart
@@ -252,7 +260,9 @@ class RegionSegmenter:
         regions_matrix = np.zeros((h, w), dtype=np.int32)
         region_colors = {}
         next_region_id = 1
-        min_region_size = 100  # pbnify's threshold
+        # Minimum region size is 1 here; we let the Vectorizer handle
+        # speckle removal via merging to avoid leaving coverage gaps.
+        min_region_size = 1
 
         for y in range(h):
             for x in range(w):
@@ -266,17 +276,8 @@ class RegionSegmenter:
 
                     keep_region = len(region["x"]) > min_region_size
 
-                    # Convexity deficit filter
-                    if keep_region:
-                        points = np.array([region["x"], region["y"]]).T
-                        if len(points) >= 3:
-                            # Use cv2.convexHull to get the area
-                            hull = cv2.convexHull(points)
-                            hull_area = cv2.contourArea(hull)
-                            if hull_area > 0:
-                                area = len(region["x"])
-                                if area / hull_area < 0.15:
-                                    keep_region = False
+                    # Convexity deficit filter - removed to prioritize coverage
+                    # over strict shape constraints.
 
                     if keep_region:
                         # Keep this region - assign it a region ID
@@ -483,8 +484,10 @@ class RegionSegmenter:
         # Initialize region colors mapping
         region_colors: dict[int, int] = {}
 
-        # Direct color segmentation - faster alternative
-        segmented, region_colors = self.direct_color_segmentation(quantized, colors)
+        # High-quality PBNify-inspired segmentation
+        color_id_matrix = self._create_color_id_matrix(quantized, colors)
+        smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
+        segmented, region_colors = self._get_regions_pbnify(smoothed)
 
         # Build adjacency graph
         adjacency_graph = self.build_adjacency_graph(segmented)
@@ -512,49 +515,45 @@ class RegionSegmenter:
 
                 # Convert to polygon - need at least 3 points
                 if len(largest_contour) >= 3:
-                    # Simplify the contour to reduce points while preserving shape
-                    # Use Douglas-Peucker algorithm with moderate tolerance
-                    epsilon = 1.0  # Tolerance for simplification
-                    simplified = cv2.approxPolyDP(largest_contour, epsilon, True)
+                    # We skip simplification here and let the Vectorizer handle it
+                    # using the topology-preserving Visvalingam-Whyatt algorithm.
+                    points = largest_contour.reshape(-1, 2).tolist()
 
-                    if len(simplified) >= 3:
-                        points = simplified.reshape(-1, 2).tolist()
+                    # Need at least 3 unique points for a polygon
+                    if len(points) >= 3:
+                        try:
+                            polygon = Polygon(points)
 
-                        # Need at least 3 unique points for a polygon
-                        if len(points) >= 3:
-                            try:
-                                polygon = Polygon(points)
+                            # Fix invalid polygons
+                            if not polygon.is_valid:
+                                # Try to fix with buffer(0) trick first
+                                polygon = polygon.buffer(0)
 
-                                # Fix invalid polygons
-                                if not polygon.is_valid:
-                                    # Try to fix with buffer(0) trick first
-                                    polygon = polygon.buffer(0)
+                            # Extract polygon from result (buffer can return MultiPolygon)
+                            final_polygon = None
 
-                                # Extract polygon from result (buffer can return MultiPolygon)
-                                final_polygon = None
+                            if polygon.geom_type == "Polygon":
+                                final_polygon = polygon
+                            elif polygon.geom_type == "GeometryCollection":
+                                # Get all polygons from collection
+                                polygons = [geom for geom in polygon.geoms if geom.geom_type == "Polygon"]
+                                if polygons:
+                                    final_polygon = max(polygons, key=lambda p: p.area)
+                            elif polygon.geom_type == "MultiPolygon":
+                                # Get largest polygon from multipolygon
+                                final_polygon = max(polygon.geoms, key=lambda p: p.area)
 
-                                if polygon.geom_type == "Polygon":
-                                    final_polygon = polygon
-                                elif polygon.geom_type == "GeometryCollection":
-                                    # Get all polygons from collection
-                                    polygons = [geom for geom in polygon.geoms if geom.geom_type == "Polygon"]
-                                    if polygons:
-                                        final_polygon = max(polygons, key=lambda p: p.area)
-                                elif polygon.geom_type == "MultiPolygon":
-                                    # Get largest polygon from multipolygon
-                                    final_polygon = max(polygon.geoms, key=lambda p: p.area)
-
-                                # Only add if it's a valid polygon with area
-                                if (
-                                    final_polygon
-                                    and final_polygon.geom_type == "Polygon"
-                                    and final_polygon.is_valid
-                                    and final_polygon.area > 0
-                                ):
-                                    regions[int(region_id)] = final_polygon
-                            except Exception:
-                                # Skip regions that can't be converted to valid polygons
-                                pass
+                            # Only add if it's a valid polygon with area
+                            if (
+                                final_polygon
+                                and final_polygon.geom_type == "Polygon"
+                                and final_polygon.is_valid
+                                and final_polygon.area > 0
+                            ):
+                                regions[int(region_id)] = final_polygon
+                        except Exception:
+                            # Skip regions that can't be converted to valid polygons
+                            pass
 
         return RegionData(
             regions=regions,

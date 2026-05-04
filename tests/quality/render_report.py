@@ -55,6 +55,7 @@ RUNS: list[RunConfig] = [
     {"name": "Boat Lineart (12 colors)", "img": "boat.webp", "map": "boat_lineart.webp", "colors": 12},
     {"name": "Boat Canny (16 colors)", "img": "boat.webp", "map": "boat_cannyedge.webp", "colors": 16},
     {"name": "Boat HED (16 colors)", "img": "boat.webp", "map": "boat_HED.webp", "colors": 16},
+    {"name": "Boat Vanilla (24 colors)", "img": "boat.webp", "map": None, "colors": 24},
     {"name": "Boat Vanilla (32 colors)", "img": "boat.webp", "map": None, "colors": 32},
 ]
 

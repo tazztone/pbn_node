@@ -55,6 +55,7 @@ class ProcessingParameters:
     preset: str = "balanced"
     output_mode: str = "colored"
     use_auto_albedo: bool = False
+    use_clahe: bool = False
     smoothing_kernel_size: int = 9
 
     def __post_init__(self):

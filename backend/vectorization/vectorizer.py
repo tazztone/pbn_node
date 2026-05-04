@@ -33,7 +33,7 @@ class Vectorizer:
         Args:
             use_bezier_smooth: Whether to fit cubic Bézier curves to simplified contours
         """
-        self.speckle_threshold = 0.001  # 0.1% of total area
+        self.speckle_threshold = 0.0005  # 0.05% of total area
         self.use_bezier_smooth = use_bezier_smooth
 
     def find_contours(self, region_mask: np.ndarray) -> list[np.ndarray]:
@@ -276,8 +276,10 @@ class Vectorizer:
                 coords = np.array(polygon.exterior.coords)
 
                 # Apply Visvalingam-Whyatt simplification
-                # Convert tolerance from pixels to area (pixels²)
-                tolerance_area = simplification**2
+                # Scale tolerance to image area for resolution independence.
+                # Baseline: simplification=1.0 -> 0.01% of total area
+                total_area = self.calculate_total_area(region_data.regions)
+                tolerance_area = (simplification * total_area) / 10000.0
                 simplified_coords = self.visvalingam_whyatt(coords, tolerance_area)
 
                 # Bézier path smoothing
