@@ -36,7 +36,7 @@ class QualityReport:
 
 
 def analyze(
-    result: SVGResult, image_shape: tuple, requested_colors: int | None = None, lineart: np.ndarray | None = None
+    result: SVGResult, image_shape: tuple, requested_colors: int, lineart: np.ndarray | None = None
 ) -> QualityReport:
     """
     Analyze PBN results and compute quality metrics.
@@ -47,14 +47,15 @@ def analyze(
     regions = result.cleaned_regions
     total_regions = len(regions)
 
-    # Speck detection: count regions with tiny area
-    # Using 0.1% area threshold as baseline (matching Vectorizer.speckle_threshold)
+    # Speck detection and Area sum for geometric coverage
     speck_count = 0
     area_threshold = total_pixels * 0.001
+    total_geometric_area = 0.0
     areas = []
     for _rid, poly in regions.items():
         area = poly.area
         areas.append(area)
+        total_geometric_area += area
         if area < area_threshold:
             speck_count += 1
 
@@ -66,17 +67,11 @@ def analyze(
     unlabeled = len(result.label_data.skipped_regions)
     label_coverage = labeled / total_regions if total_regions > 0 else 0.0
 
-    # Fill coverage: how much of the rasterized preview is non-black
-    # Pipeline's quantized preview is drawn on a black background
-    preview = result.quantized
-    filled_mask = np.any(preview > 5, axis=2)
-    fill_coverage = np.sum(filled_mask) / total_pixels
+    # Fill coverage: geometric area sum / total pixels
+    fill_coverage = total_geometric_area / total_pixels
 
     # Color efficiency
     actual_colors = result.color_palette.color_count
-    if requested_colors is None:
-        requested_colors = actual_colors  # Fallback to 100% if unknown
-
     color_efficiency = actual_colors / requested_colors if requested_colors > 0 else 1.0
 
     # Edge fidelity
@@ -87,10 +82,11 @@ def analyze(
         if len(resized_lineart.shape) == 3:
             resized_lineart = cv2.cvtColor(resized_lineart, cv2.COLOR_BGR2GRAY)
 
-        # Binary mask of strong lineart edges
-        strong_edges = (resized_lineart > 0.3).astype(np.uint8)
+        # Binary mask of strong lineart edges (tightened to 0.5)
+        strong_edges = (resized_lineart > 0.5).astype(np.uint8)
 
         # Detect edges in output quantized preview
+        preview = result.quantized
         gray_preview = cv2.cvtColor(preview, cv2.COLOR_BGR2GRAY)
         # Canny to find boundaries in the PBN result
         output_edges = cv2.Canny(gray_preview, 50, 150) > 0

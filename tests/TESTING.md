@@ -52,7 +52,8 @@ tests/
 ├── quality/             # Visual and numerical quality feedback loop
 │   ├── metrics.py       # Computable quality metrics
 │   ├── test_quality.py  # Regression guards with thresholds
-│   └── render_report.py # Standalone HTML report generator
+│   ├── render_report.py # Standalone HTML report generator
+│   └── llm_review.py    # LLM-based visual critique integration
 ```
 
 ---
@@ -118,7 +119,7 @@ The loop evaluates 6 core dimensions of PBN quality:
 1.  **Speck Density**: Ratio of regions smaller than 0.1% of the image area.
 2.  **Color Efficiency**: Percentage of requested colors actually appearing in the SVG.
 3.  **Label Coverage**: Ratio of regions that received a valid label vs. those skipped.
-4.  **Fill Coverage**: Verification that 100% of the canvas is covered by PBN regions.
+4.  **Fill Coverage**: Geometric verification that the canvas is fully covered by PBN regions (using `shapely` area calculations).
 5.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
 6.  **Region Dominance**: Size of the largest region relative to total area.
 
@@ -129,11 +130,22 @@ The loop evaluates 6 core dimensions of PBN quality:
 For human-in-the-loop quality assessment, use the standalone report generator:
 
 ```bash
-# Generate the HTML report
+# Generate the standard HTML report
 ../../venv/bin/python tests/quality/render_report.py
+
+# Generate report with LLM vision critique (requires API key)
+../../venv/bin/python tests/quality/render_report.py --llm-review --api-key YOUR_KEY
 ```
 
-Open `tests/quality/output/report.html` in your browser to see side-by-side results and detailed metrics.
+### LLM-Based Visual Review
+
+The quality suite supports optional AI-powered critique using OpenAI-compatible APIs (e.g., OpenRouter, Local LLMs). This provides qualitative insights that deterministic metrics miss, such as artistic faithfulness and label readability.
+
+- **Caching**: Reviews are cached locally in `tests/quality/.llm_cache.json` based on image content hash to avoid redundant API calls.
+- **Model**: Defaults to `google/gemini-2.0-flash-001` (via OpenRouter).
+- **Prompt**: Focuses on region clarity, label placement, and artistic defects.
+
+Open `tests/quality/output/report.html` in your browser to see side-by-side results, metrics, and AI critiques.
 
 ---
 

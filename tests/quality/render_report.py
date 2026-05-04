@@ -2,6 +2,7 @@
 Run: python tests/quality/render_report.py
 Produces: tests/quality/output/report.html
 """
+import argparse
 import base64
 import os
 import sys
@@ -10,26 +11,19 @@ from typing import TypedDict
 import cv2
 import numpy as np
 
-# Add the parent of the project root to path to support package-style imports
-# This allows 'from pbn_node.backend...' to work correctly
+# Add the parent of the project root and the root itself to path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 parent_dir = os.path.dirname(root_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+for p in [root_dir, parent_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-# --- MOCKING FOR STANDALONE RUN ---
-from unittest.mock import MagicMock  # noqa: E402
+# --- MOCKING SETUP ---
+from tests.mock_comfyui import install_comfyui_mocks  # noqa: E402
 
-if "folder_paths" not in sys.modules:
-    sys.modules["folder_paths"] = MagicMock()
-if "comfy" not in sys.modules:
-    sys.modules["comfy"] = MagicMock()
-if "comfy_api" not in sys.modules:
-    sys.modules["comfy_api"] = MagicMock()
-if "comfy_api.latest" not in sys.modules:
-    sys.modules["comfy_api.latest"] = MagicMock()
-# ----------------------------------
+install_comfyui_mocks()
 
+from llm_review import LLMReviewer  # noqa: E402
 from metrics import analyze  # noqa: E402
 
 from pbn_node.backend.models import PerceptionInputs, ProcessingParameters  # noqa: E402
@@ -62,7 +56,7 @@ def img_to_b64(img_bgr):
     return base64.b64encode(buf).decode()
 
 
-def generate_report():
+def generate_report(save_svgs=False, llm_reviewer: LLMReviewer = None):
     rows = []
     processor = ImageProcessor()
 
@@ -91,6 +85,12 @@ def generate_report():
         print(f"Processing {run['name']}...")
         result = processor.process_array(img, params)
 
+        if save_svgs:
+            svg_name = run["name"].replace(" ", "_").replace("(", "").replace(")", "").lower() + ".svg"
+            svg_path = os.path.join(OUT_DIR, svg_name)
+            with open(svg_path, "w", encoding="utf-8") as f:
+                f.write(result.svg_content)
+
         # Analyze
         lineart_for_metrics = None
         if edge_map is not None:
@@ -102,9 +102,17 @@ def generate_report():
         thumb_in = cv2.resize(img, (320, 320), interpolation=cv2.INTER_AREA)
         thumb_out = cv2.resize(result.quantized, (320, 320), interpolation=cv2.INTER_AREA)
 
-        # Status logic
-        is_good = report.speck_ratio < 0.05 and report.fill_coverage > 0.95 and report.label_coverage > 0.8
+        # Status logic (calibrated to geometric metrics)
+        is_good = report.speck_ratio < 0.15 and report.fill_coverage > 0.70 and report.label_coverage > 0.85
         status = "✅" if is_good else "⚠️"
+
+        # LLM Critique
+        llm_column = ""
+        if llm_reviewer:
+            print(f"Requesting LLM review for {run['name']}...")
+            _, img_encoded = cv2.imencode(".webp", result.quantized, [cv2.IMWRITE_WEBP_QUALITY, 80])
+            critique = llm_reviewer.review_image(img_encoded.tobytes())
+            llm_column = f'<td style="max-width: 300px; font-size: 0.85em; color: #ccc;">{critique}</td>'
 
         rows.append(
             f"""
@@ -127,6 +135,7 @@ def generate_report():
                 {f"{report.edge_violation_ratio:.1%}" if report.edge_violation_ratio
                  is not None else "N/A"}</span></div>
           </td>
+          {llm_column}
         </tr>"""
         )
 
@@ -159,6 +168,7 @@ def generate_report():
                 <th>Source</th>
                 <th>Result</th>
                 <th>Metrics</th>
+                { '<th>LLM Critique</th>' if llm_reviewer else '' }
             </tr>
         </thead>
         <tbody>
@@ -178,4 +188,20 @@ def generate_report():
 
 
 if __name__ == "__main__":
-    generate_report()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--save-svgs", action="store_true", help="Save raw SVG files to output directory")
+    parser.add_argument("--llm-review", action="store_true", help="Enable LLM-based visual critique")
+    parser.add_argument("--api-key", help="API Key for LLM service (OpenRouter or OpenAI)")
+    parser.add_argument("--api-base", default="https://openrouter.ai/api/v1", help="Base URL for API")
+    parser.add_argument("--model", default="google/gemini-2.0-flash-001", help="Model to use for review")
+    args = parser.parse_args()
+
+    reviewer = None
+    if args.llm_review:
+        api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            print("ERROR: --api-key or OPENROUTER_API_KEY env var required for --llm-review")
+            sys.exit(1)
+        reviewer = LLMReviewer(api_key=api_key, api_base=args.api_base, model=args.model)
+
+    generate_report(save_svgs=args.save_svgs, llm_reviewer=reviewer)

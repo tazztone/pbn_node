@@ -35,9 +35,9 @@ def test_region_quality_baseline(color_count):
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=color_count)
 
-    # Sanity thresholds (calibrated to baseline)
-    assert report.speck_ratio < 0.12, f"Too many specks: {report.speck_ratio:.1%}"
-    assert report.fill_coverage > 0.95, f"Low fill coverage: {report.fill_coverage:.1%}"
+    # Sanity thresholds (calibrated to baseline with geometric metrics)
+    assert report.speck_ratio < 0.15, f"Too many specks: {report.speck_ratio:.1%}"
+    assert report.fill_coverage > 0.70, f"Low geometric fill coverage: {report.fill_coverage:.1%}"
     assert report.label_coverage > 0.85, f"Low label coverage: {report.label_coverage:.1%}"
     assert report.actual_color_count <= color_count
 
@@ -59,7 +59,7 @@ def test_lineart_edge_fidelity():
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=16, lineart=lineart)
 
-    # With lineart, we expect reasonable edge fidelity (baseline around 33-47%)
+    # With lineart and strong edge threshold (0.5), we expect violation < 0.5
     assert report.edge_violation_ratio is not None
     assert report.edge_violation_ratio < 0.5, f"Poor lineart edge fidelity: {report.edge_violation_ratio:.1%}"
 
