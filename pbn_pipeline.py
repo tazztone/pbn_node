@@ -3,7 +3,6 @@ import logging
 import time
 
 import cv2
-import numpy as np
 
 from .backend.labeling.label_placer import LabelPlacer
 from .backend.models import PerceptionInputs, ProcessingParameters, SVGResult
@@ -13,6 +12,7 @@ from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
 from .backend.vectorization.vectorizer import Vectorizer
+from .pbn_renderer import PBNRenderer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class ImageProcessor:
         self.preprocessor = Preprocessor()
         self.quantizer = ColorQuantizer()
         self.svg_generator = SVGGenerator()
+        self.renderer = PBNRenderer()
 
     def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None) -> SVGResult:
         """
@@ -140,39 +141,20 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(6, 6)
 
-            # Create final high-fidelity preview from simplified polygons
-            # This reflects the ACTUAL smooth boundaries and simplification in the final SVG
+            # Create final high-fidelity preview using the official renderer
+            # This ensures the preview is 100% faithful to the deliverable, including gap sealing
             h, w = quantized.shape[:2]
-            final_preview = np.zeros((h, w, 3), dtype=np.uint8)
-
-            # Convert palette to BGR for rasterization using OpenCV's internal mapping
-            palette_lab_uint8 = palette.colors.astype(np.uint8).reshape(1, -1, 3)
-            palette_bgr = cv2.cvtColor(palette_lab_uint8, cv2.COLOR_LAB2BGR).reshape(-1, 3)
-
-            # Draw each polygon
-            for rid, polygon in cleaned_regions.items():
-                if rid in renumbered_colors:
-                    color_idx = renumbered_colors[rid]
-                    color = palette_bgr[color_idx].tolist()
-
-                    # Convert polygon coordinates to numpy for cv2.fillPoly
-                    if polygon.exterior:
-                        pts = np.array(polygon.exterior.coords, dtype=np.int32)
-                        cv2.fillPoly(final_preview, [pts], color)
-                        # Seal rounding gaps by drawing a 1px border of the same color
-                        cv2.polylines(final_preview, [pts], isClosed=True, color=color, thickness=1)
-
-                        # Handle holes (interiors)
-                        for _ in polygon.interiors:
-                            # Note: We don't really have 'holes' in a typical PBN,
-                            # but for completeness we fill them with background or handle as needed.
-                            # In PBN, polygons are usually touching, not nested.
-                            pass
-
-            # If there are any unfilled pixels (black), they remain black.
-            # This provides an honest view of polygon coverage gaps.
-            # mask = np.all(final_preview == 0, axis=2)
-            # final_preview[mask] = [0, 0, 0]
+            final_preview = self.renderer.render(
+                cleaned_regions,
+                label_data,
+                palette,
+                w,
+                h,
+                mode="colored",
+                region_colors=renumbered_colors,
+                shared_borders=region_data.shared_borders,
+                use_shared_borders=p.use_shared_borders,
+            )
 
             processing_time = time.time() - start_time
 

@@ -92,6 +92,8 @@ def install_comfyui_mocks():
                 self.execution = MagicMock()
 
         mock_comfy_api_latest.ComfyAPISync = MockComfyAPISync
+        mock_comfy_api_latest.ComfyExtension = MagicMock
+        mock_comfy_api_latest.io = mock_io
 
         sys.modules["comfy_api"] = mock_comfy_api
         sys.modules["comfy_api.latest"] = mock_comfy_api_latest

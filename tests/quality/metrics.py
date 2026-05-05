@@ -32,7 +32,8 @@ class QualityReport:
     edge_violation_ratio: float | None  # % of lineart edges missing in output
 
     # === Coverage ===
-    fill_coverage: float  # % of pixels covered by regions
+    fill_coverage: float  # % of pixels covered by raw polygons (geometric health)
+    render_coverage: float  # % of pixels covered by renderer (includes shared borders)
 
 
 def analyze(
@@ -67,18 +68,25 @@ def analyze(
     unlabeled = len(result.label_data.skipped_regions)
     label_coverage = labeled / total_regions if total_regions > 0 else 0.0
 
-    # Fill coverage: use rasterization to get exact pixel count
-    # This avoids the underestimation inherent in geometric area sums
-    mask = np.zeros((h, w), dtype=np.uint8)
+    # 1. Fill coverage: Pure geometric polygon area (fillPoly only)
+    # This reflects the quality of vectorization and topological drift
+    fill_mask = np.zeros((h, w), dtype=np.uint8)
     for _rid, poly in regions.items():
-        # Convert shapely polygon to cv2-compatible contour
         pts = np.array(poly.exterior.coords, dtype=np.int32)
-        cv2.fillPoly(mask, [pts], 255)
-        # Match pipeline sealing logic: 1px border of the same color
-        cv2.polylines(mask, [pts], isClosed=True, color=255, thickness=1)
+        cv2.fillPoly(fill_mask, [pts], 255)
 
-    fill_pixels = np.count_nonzero(mask)
-    fill_coverage = fill_pixels / total_pixels
+    fill_coverage = np.count_nonzero(fill_mask) / total_pixels
+
+    # 2. Render coverage: Visual solidness (matches PBNRenderer logic)
+    # Includes shared borders with thickness=2 to seal gaps
+    render_mask = fill_mask.copy()
+    if result.shared_borders:
+        for _rid, borders in result.shared_borders.items():
+            for border in borders:
+                border_pts = np.array(border.coords, dtype=np.int32)
+                cv2.polylines(render_mask, [border_pts], isClosed=False, color=255, thickness=2)
+
+    render_coverage = np.count_nonzero(render_mask) / total_pixels
 
     # Color efficiency
     actual_colors = result.color_palette.color_count
@@ -121,4 +129,5 @@ def analyze(
         unlabeled_count=unlabeled,
         edge_violation_ratio=edge_violation_ratio,
         fill_coverage=fill_coverage,
+        render_coverage=render_coverage,
     )

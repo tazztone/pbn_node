@@ -61,8 +61,8 @@ class ProcessingParameters:
 
     def __post_init__(self):
         # Validate simplification range
-        if self.simplification < 0.0:
-            raise ValueError("Simplification must be at least 0.0")
+        if self.simplification < 0.5:
+            raise ValueError("Simplification must be at least 0.5")
         if not (2.0 <= self.ciede2000_merge_thresh <= 20.0):
             raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
         if not (2 <= self.min_region_width <= 20):
