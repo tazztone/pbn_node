@@ -29,7 +29,7 @@ PRESETS = {
         "use_thin_cleanup": True,
         "use_shared_borders": True,
         "use_bezier_smooth": False,
-        "use_auto_albedo": True,
+        "use_auto_albedo": False,
     },
     "portrait": {
         "use_ciede2000": True,
