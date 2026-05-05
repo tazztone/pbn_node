@@ -117,15 +117,23 @@ Visual and numerical feedback loop for artistic and technical refinement.
 
 #### Computable Metrics
 
-The loop evaluates 6 core dimensions of PBN quality:
+The loop evaluates 7 core dimensions of PBN quality:
 
-1.  **Speck Density**: Ratio of regions smaller than 0.1% of the image area.
+1.  **Speck Density**: Adaptive ratio of regions smaller than a threshold scaled by requested color count to preserve legitimate details.
 2.  **Color Efficiency**: Percentage of requested colors actually appearing in the SVG.
 3.  **Label Coverage**: Ratio of regions that received a valid label vs. those skipped.
-4.  **Fill Coverage**: Geometric health of raw polygon polygons. Used to catch topological drift during simplification.
-5.  **Render Coverage**: Visual solidness of the final output. Validates the renderer's ability to seal gaps using shared borders.
-6.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
-7.  **Region Dominance**: Size of the largest region relative to total area.
+4.  **Fill Coverage**: Geometric health of raw polygons (fillPoly only). Catches topological drift during vectorization and simplification.
+5.  **Render Coverage**: Visual solidness of the final output (with thickness=2 shared-border strokes).
+6.  **Renderer Delta**: The difference between Render Coverage and Fill Coverage (`render_coverage - fill_coverage`). A healthy pipeline should have `delta < 5pp`. A high delta (e.g. >10pp) indicates the renderer is doing excessive "structural surgery" to hide bad polygon gaps.
+7.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
+8.  **Region Dominance**: Size of the largest region relative to total area.
+
+### The Simplification Cliff
+Parameter sweeps show a non-linear cliff for the `simplification` parameter:
+*   **0.5**: Near-lossless polygons; renderer delta is negligible (<1pp).
+*   **1.0**: Moderate drift; renderer seals ~4pp. This is the optimal edge of the cliff.
+*   **1.5**: Heavy drift; renderer seals ~10pp. Vertices defining shared boundaries are being destroyed.
+*   **2.0**: Catastrophic drift; delta exceeds 14pp, leading to a "fake" visual result that will fail print registration.
 
 ---
 

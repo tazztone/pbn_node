@@ -122,9 +122,13 @@ def generate_report(save_svgs=False, llm_reviewer: LLMReviewer | None = None):
         thumb_out = resize_maintain_ar(result.quantized)
 
         # Status logic
+        delta = report.render_coverage - report.fill_coverage
+        delta_class = "danger" if delta > 0.10 else ("warn" if delta > 0.05 else "")
+
         is_warning = (
             report.speck_ratio > 0.1
             or report.fill_coverage < 0.7
+            or delta > 0.10
             or (report.edge_violation_ratio is not None and report.edge_violation_ratio > 0.42)
         )
         status_cls = "status-warn" if is_warning else "status-ok"
@@ -159,6 +163,14 @@ def generate_report(save_svgs=False, llm_reviewer: LLMReviewer | None = None):
                 <div class="metric-card {"warn" if report.fill_coverage < 0.85 else ""}">
                     <label>Fill</label>
                     <value>{report.fill_coverage:.1%}</value>
+                </div>
+                <div class="metric-card {"warn" if report.render_coverage < 0.90 else ""}">
+                    <label>Render</label>
+                    <value>{report.render_coverage:.1%}</value>
+                </div>
+                <div class="metric-card {delta_class}">
+                    <label>Delta</label>
+                    <value>+{delta:.1%}</value>
                 </div>
                 <div class="metric-card {"warn" if (report.edge_violation_ratio or 0) > 0.42 else ""}">
                     <label>Edge Fid.</label>

@@ -43,6 +43,11 @@ def test_region_quality_baseline(color_count):
     assert report.label_coverage > 0.75, f"Low label coverage: {report.label_coverage:.1%}"
     assert report.actual_color_count <= color_count
 
+    # Geometric/Render consistency invariants
+    assert report.render_coverage >= report.fill_coverage, "Visual coverage must equal or exceed geometric coverage."
+    delta = report.render_coverage - report.fill_coverage
+    assert delta < 0.05, f"Excessive renderer patching (delta > 5pp): {delta:.1%}"
+
 
 @pytest.mark.quality
 def test_lineart_edge_fidelity():

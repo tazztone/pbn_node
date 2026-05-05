@@ -50,7 +50,11 @@ def analyze(
 
     # Speck detection and Area sum for geometric coverage
     speck_count = 0
-    area_threshold = total_pixels * 0.001
+    # Adaptive threshold: scales with color count so detailed high-color scenes
+    # aren't unfairly penalized for legitimate small details.
+    # Calibrated so 16 colors = 0.1% baseline (0.016 / 16 = 0.001).
+    colors_for_thresh = max(requested_colors, 2)
+    area_threshold = total_pixels * (0.016 / colors_for_thresh)
     total_geometric_area = 0.0
     areas = []
     for _rid, poly in regions.items():
