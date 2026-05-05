@@ -72,8 +72,10 @@ def analyze(
     mask = np.zeros((h, w), dtype=np.uint8)
     for _rid, poly in regions.items():
         # Convert shapely polygon to cv2-compatible contour
-        ext_coords = np.array(poly.exterior.coords, dtype=np.int32)
-        cv2.fillPoly(mask, [ext_coords], 255)
+        pts = np.array(poly.exterior.coords, dtype=np.int32)
+        cv2.fillPoly(mask, [pts], 255)
+        # Match pipeline sealing logic: 1px border of the same color
+        cv2.polylines(mask, [pts], isClosed=True, color=255, thickness=1)
 
     fill_pixels = np.count_nonzero(mask)
     fill_coverage = fill_pixels / total_pixels

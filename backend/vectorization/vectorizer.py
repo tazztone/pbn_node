@@ -265,8 +265,8 @@ class Vectorizer:
             Dictionary of simplified polygons
         """
         # Validate simplification parameter
-        if not (0.5 <= simplification <= 2.0):
-            raise ValueError("Simplification must be between 0.5 and 2.0")
+        if simplification < 0.0:
+            raise ValueError("Simplification must be at least 0.0")
 
         simplified_regions = {}
 
@@ -276,10 +276,10 @@ class Vectorizer:
                 coords = np.array(polygon.exterior.coords)
 
                 # Apply Visvalingam-Whyatt simplification
-                # Scale tolerance to image area for resolution independence.
-                # Baseline: simplification=1.0 -> 0.01% of total area
+                # Scale tolerance for resolution independence.
+                # Baseline: simplification=1.0 -> ~1.0-2.0 area units per 1MP
                 total_area = self.calculate_total_area(region_data.regions)
-                tolerance_area = (simplification * total_area) / 10000.0
+                tolerance_area = max(0.1, (simplification**2) * (total_area / 500000.0))
                 simplified_coords = self.visvalingam_whyatt(coords, tolerance_area)
 
                 # Bézier path smoothing

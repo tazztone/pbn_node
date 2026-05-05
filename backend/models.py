@@ -57,11 +57,12 @@ class ProcessingParameters:
     use_auto_albedo: bool = False
     use_clahe: bool = False
     smoothing_kernel_size: int = 9
+    min_region_size: int | None = None
 
     def __post_init__(self):
         # Validate simplification range
-        if not (0.5 <= self.simplification <= 2.0):
-            raise ValueError("Simplification must be between 0.5 and 2.0")
+        if self.simplification < 0.0:
+            raise ValueError("Simplification must be at least 0.0")
         if not (2.0 <= self.ciede2000_merge_thresh <= 20.0):
             raise ValueError("ciede2000_merge_thresh must be between 2.0 and 20.0")
         if not (2 <= self.min_region_width <= 20):

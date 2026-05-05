@@ -29,6 +29,7 @@ class RegionSegmenter:
         edge_weight_map: np.ndarray | None = None,
         lineart_strength: float = 0.0,
         smoothing_kernel_size: int = 9,
+        min_region_size: int | None = None,
     ):
         """
         Initialize segmenter with configuration options.
@@ -43,6 +44,7 @@ class RegionSegmenter:
         self.edge_weight_map = edge_weight_map
         self.lineart_strength = lineart_strength
         self.smoothing_kernel_size = smoothing_kernel_size
+        self.min_region_size = min_region_size
 
     def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
         """
@@ -57,25 +59,20 @@ class RegionSegmenter:
         # Step 1: Convert quantized BGR image to color ID matrix
         color_id_matrix = self._create_color_id_matrix(quantized, colors)
 
-        # Step 2: Apply multi-pass median filter to remove pixel-level quantization noise
-        # Using multiple passes with increasing kernel sizes is much more effective
-        # for images of varying resolutions than a single 3x3 pass.
+        # Step 2: Apply a light median filter to remove pixel-level quantization noise
         if color_id_matrix.max() < 256:
-            # OpenCV medianBlur requires uint8 or float32
-            color_id_matrix = color_id_matrix.astype(np.uint8)
-            for k in [3, 5, 7]:
-                color_id_matrix = cv2.medianBlur(color_id_matrix, k)
-            color_id_matrix = color_id_matrix.astype(np.int32)
+            color_id_matrix = cv2.medianBlur(color_id_matrix.astype(np.uint8), 3).astype(np.int32)
 
         # Step 3: Apply vectorized majority filter (smoothing)
         smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
 
-        # Step 2.5: Thin-region scanline removal
-        if self.use_thin_cleanup:
-            smoothed = self._thin_region_cleanup(smoothed, self.min_region_width)
-
-        # Step 3: Apply pbnify's getLabelLocs function (flood-fill + region filtering)
+        # Step 4: Apply pbnify's region extraction (flood-fill + raster merging)
         regions_matrix, region_colors = self._get_regions_pbnify(smoothed)
+
+        # Diagnostic: check for 0s
+        unassigned = np.count_nonzero(regions_matrix == 0)
+        if unassigned > 0:
+            print(f"DEBUG: Found {unassigned} unassigned pixels in regions_matrix")
 
         return regions_matrix, region_colors
 
@@ -213,11 +210,8 @@ class RegionSegmenter:
 
         counts = np.zeros((len(unique_ids), h, w), dtype=np.float32)
 
-        # Calculate dynamic kernel size: ~1% of image diagonal, min 9
-        # This ensures smoothing scales correctly with resolution.
-        diagonal = int(np.sqrt(h**2 + w**2))
-        k_size = max(9, (diagonal // 100) | 1)  # ensure odd
-
+        # Use user-provided kernel size, ensure it's odd and at least 3
+        k_size = max(3, self.smoothing_kernel_size | 1)
         kernel = np.ones((k_size, k_size), dtype=np.float32)
 
         # Build per-pixel attenuation from lineart
@@ -256,40 +250,36 @@ class RegionSegmenter:
         Finds connected regions and removes small ones or regions with severe convexity deficits.
         """
         h, w = mat.shape
-        covered = np.zeros((h, w), dtype=bool)
-        regions_matrix = np.zeros((h, w), dtype=np.int32)
-        region_colors = {}
-        next_region_id = 1
-        # Minimum region size is 1 here; we let the Vectorizer handle
-        # speckle removal via merging to avoid leaving coverage gaps.
-        min_region_size = 1
+        # Scale min_region_size to image resolution: 0.002% of pixels, min 10
+        if self.min_region_size is not None:
+            min_region_size = self.min_region_size
+        else:
+            min_region_size = max(10, (h * w) // 50000)
 
+        # Pass 1: Merge small regions in the raster matrix
+        covered = np.zeros((h, w), dtype=bool)
         for y in range(h):
             for x in range(w):
                 if not covered[y, x]:
-                    # Capture original color index (0-based) from mat
-                    # mat contains 1-indexed color IDs from _create_color_id_matrix
-                    color_idx = int(mat[y, x]) - 1
-
-                    # Get connected region
                     region = self._get_region_pbnify(mat, covered, x, y, w, h)
-
-                    keep_region = len(region["x"]) > min_region_size
-
-                    # Convexity deficit filter - removed to prioritize coverage
-                    # over strict shape constraints.
-
-                    if keep_region:
-                        # Keep this region - assign it a region ID
-                        for i in range(len(region["x"])):
-                            px, py = region["x"][i], region["y"][i]
-                            regions_matrix[py, px] = next_region_id
-
-                        region_colors[next_region_id] = color_idx
-                        next_region_id += 1
-                    else:
-                        # Remove small or convoluted region (merge with neighbor)
+                    if len(region["x"]) < min_region_size:
                         self._remove_region_pbnify(mat, region)
+
+        # Pass 2: Assign unique region IDs using connectedComponents for 100% coverage
+        regions_matrix = np.zeros((h, w), dtype=np.int32)
+        region_colors = {}
+        next_region_id = 1
+
+        unique_colors = np.unique(mat)
+        for color_id in unique_colors:
+            if color_id == 0:
+                continue
+            mask = (mat == color_id).astype(np.uint8)
+            num_labels, labels = cv2.connectedComponents(mask, connectivity=4)
+            for i in range(1, num_labels):
+                regions_matrix[labels == i] = next_region_id
+                region_colors[next_region_id] = int(color_id) - 1
+                next_region_id += 1
 
         return regions_matrix, region_colors
 
@@ -367,9 +357,11 @@ class RegionSegmenter:
             # Hard Veto: If the weakest boundary is still a strong edge,
             # don't merge. This preserves small geometric details.
             # Scaling: higher strength makes the veto more sensitive.
-            veto_threshold = max(0.2, 0.9 - (self.lineart_strength * 0.8))
-            if min_edge > veto_threshold:
-                return  # Skip merge! Preserve this small detail.
+            # ONLY apply veto if region is large enough to survive vectorization (> 10 px)
+            if len(x_coords) > 10:
+                veto_threshold = max(0.2, 0.9 - (self.lineart_strength * 0.8))
+                if min_edge > veto_threshold:
+                    return  # Skip merge! Preserve this small detail.
 
             new_value = best_neighbor
         else:
@@ -502,6 +494,9 @@ class RegionSegmenter:
         region_ids = np.unique(segmented)
         region_ids = region_ids[region_ids > 0]
 
+        # Use a safe counter for new island IDs to avoid collisions
+        next_id = int(np.max(region_ids)) + 1 if len(region_ids) > 0 else 1
+
         for region_id in region_ids:
             # Create mask for this region
             mask = (segmented == region_id).astype(np.uint8) * 255
@@ -510,50 +505,36 @@ class RegionSegmenter:
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             if contours:
-                # Use the largest contour
-                largest_contour = max(contours, key=cv2.contourArea)
+                # Track original color for this region set
+                color_idx = region_colors[region_id]
 
-                # Convert to polygon - need at least 3 points
-                if len(largest_contour) >= 3:
-                    # We skip simplification here and let the Vectorizer handle it
-                    # using the topology-preserving Visvalingam-Whyatt algorithm.
-                    points = largest_contour.reshape(-1, 2).tolist()
+                # Sort contours by area to keep the original ID for the largest part
+                sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-                    # Need at least 3 unique points for a polygon
-                    if len(points) >= 3:
-                        try:
-                            polygon = Polygon(points)
+                for i, contour in enumerate(sorted_contours):
+                    if len(contour) < 3:
+                        continue
+                    try:
+                        poly = Polygon(contour.reshape(-1, 2))
+                        if not poly.is_valid:
+                            poly = poly.buffer(0)
 
-                            # Fix invalid polygons
-                            if not polygon.is_valid:
-                                # Try to fix with buffer(0) trick first
-                                polygon = polygon.buffer(0)
+                        # If buffer(0) returns MultiPolygon, split it
+                        parts = [poly] if poly.geom_type == "Polygon" else list(poly.geoms)
 
-                            # Extract polygon from result (buffer can return MultiPolygon)
-                            final_polygon = None
-
-                            if polygon.geom_type == "Polygon":
-                                final_polygon = polygon
-                            elif polygon.geom_type == "GeometryCollection":
-                                # Get all polygons from collection
-                                polygons = [geom for geom in polygon.geoms if geom.geom_type == "Polygon"]
-                                if polygons:
-                                    final_polygon = max(polygons, key=lambda p: p.area)
-                            elif polygon.geom_type == "MultiPolygon":
-                                # Get largest polygon from multipolygon
-                                final_polygon = max(polygon.geoms, key=lambda p: p.area)
-
-                            # Only add if it's a valid polygon with area
-                            if (
-                                final_polygon
-                                and final_polygon.geom_type == "Polygon"
-                                and final_polygon.is_valid
-                                and final_polygon.area > 0
-                            ):
-                                regions[int(region_id)] = final_polygon
-                        except Exception:
-                            # Skip regions that can't be converted to valid polygons
-                            pass
+                        for part in parts:
+                            if part.geom_type == "Polygon" and part.is_valid and part.area >= 1.0:
+                                if i == 0:
+                                    regions[region_id] = part
+                                else:
+                                    # Assign a new unique ID for the island
+                                    regions[next_id] = part
+                                    region_colors[next_id] = color_idx
+                                    next_id += 1
+                                # Mark as processed so we don't repeat this part if i=0 but MultiPolygon
+                                i = 999
+                    except Exception:
+                        continue
 
         return RegionData(
             regions=regions,

@@ -100,6 +100,7 @@ class ImageProcessor:
                 edge_weight_map=edge_map,
                 lineart_strength=edge_strength,
                 smoothing_kernel_size=p.smoothing_kernel_size,
+                min_region_size=p.min_region_size,
             )
             region_data = segmenter.segment(quantized, palette.colors)
 
@@ -107,10 +108,11 @@ class ImageProcessor:
             logger.info("Stage 5/6: Vectorizing regions")
             if api:
                 api.execution.set_progress(5, 6)
-
             vectorizer = Vectorizer(use_bezier_smooth=p.use_bezier_smooth)
             vectorized_regions = vectorizer.vectorize(region_data, p.simplification)
 
+            # Stage 5: Vectorization - Skip speckle removal as it causes coverage gaps
+            # The new majority smoothing logic already handles noise effectively.
             cleaned_regions = vectorized_regions
             updated_region_colors = dict(region_data.region_colors)
 
@@ -157,6 +159,8 @@ class ImageProcessor:
                     if polygon.exterior:
                         pts = np.array(polygon.exterior.coords, dtype=np.int32)
                         cv2.fillPoly(final_preview, [pts], color)
+                        # Seal rounding gaps by drawing a 1px border of the same color
+                        cv2.polylines(final_preview, [pts], isClosed=True, color=color, thickness=1)
 
                         # Handle holes (interiors)
                         for _ in polygon.interiors:
