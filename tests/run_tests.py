@@ -12,10 +12,25 @@ def main():
 
     args = [sys.executable, "-m", "pytest"]
 
-    if len(sys.argv) > 1:
-        args.extend(sys.argv[1:])
+    # Parse our custom flags and separate them from pytest args
+    pytest_args = []
+    run_quality = False
+
+    for arg in sys.argv[1:]:
+        if arg == "--quality":
+            run_quality = True
+        elif arg == "--all":
+            run_quality = True
+        else:
+            pytest_args.append(arg)
+
+    if pytest_args:
+        args.extend(pytest_args)
     else:
-        args.extend(["unit", "integration", "quality"])
+        # Default run: only fast unit and integration tests
+        args.extend(["unit", "integration"])
+        if run_quality:
+            args.append("quality")
 
     print(f"Executing: {' '.join(args)}")
 
