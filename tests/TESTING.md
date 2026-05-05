@@ -19,13 +19,16 @@ dependencies like `torch` and `shapely` are available.
 cd custom_nodes/pbn_node
 
 # Run all tests using the ComfyUI venv (relative to pbn_node)
+../../venv/bin/python tests/run_tests.py --all
+
+# Run ONLY fast tests (unit and integration, default)
 ../../venv/bin/python tests/run_tests.py
 
-# Run with verbose output
-../../venv/bin/python tests/run_tests.py -v
+# Run ONLY slow quality benchmarks
+../../venv/bin/python tests/run_tests.py --quality
 
-# Run only unit tests
-../../venv/bin/python tests/run_tests.py unit/
+# Run specific suite with verbose output
+../../venv/bin/python tests/run_tests.py unit/ -v
 ```
 
 ---
@@ -119,9 +122,10 @@ The loop evaluates 6 core dimensions of PBN quality:
 1.  **Speck Density**: Ratio of regions smaller than 0.1% of the image area.
 2.  **Color Efficiency**: Percentage of requested colors actually appearing in the SVG.
 3.  **Label Coverage**: Ratio of regions that received a valid label vs. those skipped.
-4.  **Fill Coverage**: Geometric verification that the canvas is fully covered by PBN regions (using `shapely` area calculations).
-5.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
-6.  **Region Dominance**: Size of the largest region relative to total area.
+4.  **Fill Coverage**: Geometric health of raw polygon polygons. Used to catch topological drift during simplification.
+5.  **Render Coverage**: Visual solidness of the final output. Validates the renderer's ability to seal gaps using shared borders.
+6.  **Edge Fidelity**: A geometric metric comparing PBN boundaries against input edge maps.
+7.  **Region Dominance**: Size of the largest region relative to total area.
 
 ---
 
