@@ -411,6 +411,7 @@ class RegionSegmenter:
     def shared_border_segmentation(self, regions: np.ndarray) -> dict[int, list[LineString]]:
         """
         Implement Shared Border Segmentation algorithm using vectorized shifts.
+        Groups touch points into 8-connected contiguous segments to prevent line artifacts.
         """
         shared_borders: dict[int, list[LineString]] = {}
         region_ids = np.unique(regions)
@@ -447,12 +448,63 @@ class RegionSegmenter:
                     border_segments[pair] = []
                 border_segments[pair].append((float(x_coords[i]), float(y_coords[i] + 0.5)))
 
-        # Convert border points to LineStrings
+        # Convert border points to LineStrings by grouping into contiguous components
         for (region1, region2), points in border_segments.items():
-            if len(points) >= 2:
-                line = LineString(points)
-                shared_borders[region1].append(line)
-                shared_borders[region2].append(line)
+            if len(points) < 2:
+                continue
+
+            # Build an 8-connected graph of the points to find contiguous components
+            border_graph = nx.Graph()
+            point_set = set(points)
+            for pt in point_set:
+                border_graph.add_node(pt)
+
+            # Add edges between 8-connected neighbors
+            for pt in point_set:
+                x, y = pt
+                # Check 8-neighbors on 0.5 coordinate grid
+                for dx in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+                    for dy in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+                        if dx == 0.0 and dy == 0.0:
+                            continue
+                        neighbor = (x + dx, y + dy)
+                        if neighbor in point_set:
+                            border_graph.add_edge(pt, neighbor)
+
+            # For each connected component, find an ordered path
+            for component in nx.connected_components(border_graph):
+                if len(component) >= 2:
+                    comp_pts = list(component)
+                    subg = border_graph.subgraph(component)
+
+                    # Find a starting node (preferably one with degree 1 in the component)
+                    start_node = comp_pts[0]
+                    for node in comp_pts:
+                        if subg.degree(node) == 1:
+                            start_node = node
+                            break
+
+                    ordered = []
+                    remaining = set(comp_pts)
+                    curr = start_node
+                    ordered.append(curr)
+                    remaining.remove(curr)
+
+                    while remaining:
+                        # Find nearest remaining neighbor
+                        nearest = min(remaining, key=lambda p: (p[0] - curr[0]) ** 2 + (p[1] - curr[1]) ** 2)
+                        dist_sq = (nearest[0] - curr[0]) ** 2 + (nearest[1] - curr[1]) ** 2
+                        # Stop if there's a huge jump (not actually adjacent)
+                        if dist_sq > 8.0:
+                            break
+                        curr = nearest
+                        ordered.append(curr)
+                        remaining.remove(curr)
+
+                    if len(ordered) >= 2:
+                        line = LineString(ordered)
+                        shared_borders[region1].append(line)
+                        shared_borders[region2].append(line)
 
         return shared_borders
 

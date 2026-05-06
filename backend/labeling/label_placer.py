@@ -27,7 +27,7 @@ class LabelPlacer:
         self.initial_precision = 1.0
         self.min_precision = 0.01
         self.timeout_ms = 100
-        self.min_region_area = 16  # pixels² (4x4)
+        self.min_region_area = 120  # pixels²
         self.min_font_size = 8
         self.tiny_font_size = 5
         self.max_font_size = 24
@@ -154,12 +154,16 @@ class LabelPlacer:
             estimated_radius = np.sqrt(polygon.area / np.pi)
             return float(estimated_radius)
 
-    def place_labels(self, regions: dict[int, Polygon]) -> LabelData:
+    def place_labels(
+        self, regions: dict[int, Polygon], width: int | None = None, height: int | None = None
+    ) -> LabelData:
         """
         Complete label placement pipeline.
 
         Args:
             regions: Dictionary of region ID to Polygon
+            width: Optional image width to prevent edge cut-offs
+            height: Optional image height to prevent edge cut-offs
 
         Returns:
             LabelData with positions, font sizes, and skipped regions
@@ -167,6 +171,7 @@ class LabelPlacer:
         positions = {}
         font_sizes = {}
         skipped_regions = set()
+        placed_coords: list[tuple[float, float]] = []
 
         for region_id, polygon in regions.items():
             # Check if region is too small for standard placement
@@ -182,9 +187,9 @@ class LabelPlacer:
                     else:
                         label_position = polygon.centroid
                 else:
-                    # Fallback for small regions (16-100 px²): use centroid or representative_point
-                    # These are skipped by should_skip_label but we want a 2nd pass
-                    if polygon.area >= 10:  # Tiny threshold for 2nd pass
+                    # Fallback for small regions (120-250 px²): use centroid or representative_point
+                    # Discard anything under 80 px² entirely
+                    if polygon.area >= 80:
                         label_position = polygon.centroid
                     else:
                         skipped_regions.add(region_id)
@@ -224,14 +229,34 @@ class LabelPlacer:
                                 # 3. Last resort: force representative_point even if on line
                                 label_position = polygon.representative_point()
 
-                positions[region_id] = label_position
-
                 # Calculate font size
                 font_size = self.calculate_font_size(polygon)
-                # If it was a small region, ensure font is tiny
                 if is_too_small:
                     font_size = self.tiny_font_size
+
+                # Ensure labels don't get cut off at the image edge
+                fpx, fpy = float(label_position.x), float(label_position.y)
+                if width is not None and height is not None:
+                    margin = max(15, int(font_size * 1.2))
+                    fpx = max(margin, min(width - margin, fpx))
+                    fpy = max(margin, min(height - margin, fpy))
+                    label_position = Point(fpx, fpy)
+
+                # Prevent label overlapping/clumping
+                is_overlapping = False
+                for ox, oy in placed_coords:
+                    dist = np.hypot(fpx - ox, fpy - oy)
+                    if dist < 25.0:  # Enforce minimum distance of 25 pixels
+                        is_overlapping = True
+                        break
+
+                if is_overlapping:
+                    skipped_regions.add(region_id)
+                    continue
+
+                positions[region_id] = label_position
                 font_sizes[region_id] = font_size
+                placed_coords.append((fpx, fpy))
 
             except Exception:
                 # Skip this region if placement fails

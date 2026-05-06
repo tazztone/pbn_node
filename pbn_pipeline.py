@@ -125,8 +125,9 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(6, 6)
 
+            h, w = quantized.shape[:2]
             label_placer = LabelPlacer(label_mode=p.label_mode, lineart=lineart_map)
-            label_data = label_placer.place_labels(cleaned_regions)
+            label_data = label_placer.place_labels(cleaned_regions, width=w, height=h)
 
             svg_content = self.svg_generator.generate_svg(
                 cleaned_regions,
