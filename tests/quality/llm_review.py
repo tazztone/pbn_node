@@ -35,6 +35,9 @@ class LLMReviewer:
         return {}
 
     def _save_cache(self):
+        # TODO: Consider adding time-based expiration (TTL) or automatic file-size
+        # limit checks in addition to the current LRU size-based eviction strategy
+        # to ensure the cache file remains small and clean.
         with open(self.cache_path, "w") as f:
             json.dump(self.cache, f, indent=2)
 

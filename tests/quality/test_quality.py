@@ -35,7 +35,11 @@ def test_region_quality_baseline(color_count):
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=color_count)
 
-    # Calibrated baseline expectations per color count to prevent loose guards
+    # Calibrated baseline expectations per color count to prevent loose guards.
+    # TODO: While these thresholds match the current performance baseline, they are
+    # still high (allowing nearly 3/4 of regions to be specks). As the island removal
+    # and aggregation segmenter pipelines are optimized, these thresholds should
+    # be tightened to converge toward < 0.30.
     expectations = {
         8: {"max_speck_ratio": 0.82, "min_label_coverage": 0.58},
         16: {"max_speck_ratio": 0.77, "min_label_coverage": 0.52},

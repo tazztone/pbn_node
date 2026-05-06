@@ -17,11 +17,7 @@ def build_diagnostic_grid(
     result,
     report,
     elapsed: float,
-    colors: int,
-    simplification: float,
-    smoothing: int,
-    min_width: int,
-    min_region_size: int | None,
+    params,  # ProcessingParameters object
     tag: str,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -78,9 +74,9 @@ def build_diagnostic_grid(
         f"Speck: {report.speck_ratio:.1%} | Time: {elapsed:.2f}s"
     )
     settings_text = (
-        f"Params: colors={colors}, simpl={simplification}, "
-        f"smooth={smoothing}, min_w={min_width}, "
-        f"min_reg={min_region_size}"
+        f"Params: colors={params.num_colors}, simpl={params.simplification}, "
+        f"smooth={params.smoothing_kernel_size}, min_w={params.min_region_width}, "
+        f"min_reg={params.min_region_size}"
     )
 
     cv2.putText(bar, metrics_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)

@@ -4,12 +4,15 @@ import sys
 import time
 from datetime import datetime
 
-# Initialize paths and ComfyUI mocks via local bootstrap import
+# Initialize paths and ComfyUI mocks explicitly
+import bootstrap
 import cv2
-import metrics  # noqa: E402
 import numpy as np
+
+bootstrap.setup()
+import metrics  # noqa: E402
 import visuals  # noqa: E402
-from bootstrap import EXAMPLE_DIR, OUT_DIR
+from bootstrap import EXAMPLE_DIR, OUT_DIR  # noqa: E402
 
 from pbn_node.backend.models import ProcessingParameters  # noqa: E402
 from pbn_node.pbn_pipeline import ImageProcessor  # noqa: E402
@@ -46,11 +49,7 @@ def run_iteration(args, img, simplification, smoothing, tag_suffix=""):
         result=result,
         report=report,
         elapsed=elapsed,
-        colors=args.colors,
-        simplification=simplification,
-        smoothing=smoothing,
-        min_width=args.min_width,
-        min_region_size=args.min_region_size,
+        params=params,
         tag=tag,
     )
 

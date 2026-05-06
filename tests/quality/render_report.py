@@ -7,10 +7,14 @@ from pathlib import Path
 from string import Template
 from typing import TypedDict
 
-# Initialize paths and ComfyUI mocks via local bootstrap import
-import cv2
-import numpy as np
-from bootstrap import EXAMPLE_DIR, OUT_DIR
+# Initialize paths and ComfyUI mocks explicitly
+import bootstrap
+
+bootstrap.setup()
+
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
+from bootstrap import EXAMPLE_DIR, OUT_DIR  # noqa: E402
 from llm_review import LLMReviewer  # noqa: E402
 from metrics import QualityReport, analyze  # noqa: E402
 from visuals import img_to_b64  # noqa: E402
