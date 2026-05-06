@@ -63,6 +63,12 @@ class LabelPlacer:
         Returns:
             Point representing optimal label position
         """
+        # Pre-simplify to bound vertex count; tolerance=1.0px retains visual shape
+        # while reducing a 10,000-vertex polygon to ~50 vertices
+        working_polygon = polygon.simplify(tolerance=1.0, preserve_topology=True)
+        if not working_polygon.is_valid or working_polygon.is_empty:
+            working_polygon = polygon  # fall back to original if simplification breaks it
+
         start_time = time.time()
         current_precision = precision
 
@@ -72,10 +78,10 @@ class LabelPlacer:
                 elapsed_ms = (time.time() - start_time) * 1000
                 if elapsed_ms > self.timeout_ms:
                     # Timeout - fall back to centroid
-                    return polygon.centroid
+                    return working_polygon.centroid
 
                 # Try polylabel with current precision
-                label_point = polylabel(polygon, tolerance=current_precision)
+                label_point = polylabel(working_polygon, tolerance=current_precision)
                 return label_point
 
             except Exception:
@@ -84,10 +90,10 @@ class LabelPlacer:
 
                 if current_precision < self.min_precision:
                     # All attempts failed - fall back to centroid
-                    return polygon.centroid
+                    return working_polygon.centroid
 
         # Fallback to centroid
-        return polygon.centroid
+        return working_polygon.centroid
 
     def calculate_font_size(self, polygon: Polygon) -> int:
         """
@@ -138,20 +144,25 @@ class LabelPlacer:
         Returns:
             Radius of largest inscribed circle in pixels
         """
+        # Pre-simplify to bound vertex count for speed
+        working_polygon = polygon.simplify(tolerance=1.0, preserve_topology=True)
+        if not working_polygon.is_valid or working_polygon.is_empty:
+            working_polygon = polygon
+
         try:
             # Polylabel returns the center of the largest inscribed circle
-            center = polylabel(polygon, tolerance=1.0)
+            center = polylabel(working_polygon, tolerance=1.0)
 
             # Calculate distance to nearest edge
             # This is the radius of the inscribed circle
-            radius = center.distance(polygon.exterior)
+            radius = center.distance(working_polygon.exterior)
 
             return float(radius)
         except Exception:
             # Fallback: estimate from area
             # For a circle: area = π * r²
             # So r = sqrt(area / π)
-            estimated_radius = np.sqrt(polygon.area / np.pi)
+            estimated_radius = np.sqrt(working_polygon.area / np.pi)
             return float(estimated_radius)
 
     def place_labels(

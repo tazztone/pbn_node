@@ -1,7 +1,7 @@
+import dataclasses
 import hashlib
 import logging
 import os
-from typing import Any
 
 import cv2
 import folder_paths
@@ -313,36 +313,26 @@ class PaintByNumberNode(io.ComfyNode):
         use_auto_albedo=False,
         smoothing_kernel_size=9,
     ):
-        # 1. Resolve Presets
-        kwargs = {
-            "image": image,
-            "num_colors": num_colors,
-            "simplification": simplification,
-            "output_mode": output_mode,
-            "preset": preset,
-            "segmentation": segmentation,
-            "lineart": lineart,
-            "lineart_strength": lineart_strength,
-            "invert_lineart": invert_lineart,
-            "segmentation_format": segmentation_format,
-            "use_ciede2000": use_ciede2000,
-            "use_palette_merge": use_palette_merge,
-            "ciede2000_merge_thresh": ciede2000_merge_thresh,
-            "use_thin_cleanup": use_thin_cleanup,
-            "min_region_width": min_region_width,
-            "use_shared_borders": use_shared_borders,
-            "label_mode": label_mode,
-            "use_bezier_smooth": use_bezier_smooth,
-            "subject_priority": subject_priority,
-            "material_weight": material_weight,
-            "edge_influence": edge_influence,
-            "use_auto_albedo": use_auto_albedo,
-            "smoothing_kernel_size": smoothing_kernel_size,
-        }
-        params = cls._resolve_presets(kwargs)
+        # 1. Build ProcessingParameters directly from declared args
+        proc_params = ProcessingParameters(
+            num_colors=num_colors if num_colors > 0 else None,
+            simplification=simplification,
+            use_ciede2000=use_ciede2000,
+            use_palette_merge=use_palette_merge,
+            ciede2000_merge_thresh=ciede2000_merge_thresh,
+            use_thin_cleanup=use_thin_cleanup,
+            min_region_width=min_region_width,
+            use_shared_borders=use_shared_borders,
+            label_mode=label_mode,
+            use_bezier_smooth=use_bezier_smooth,
+            preset=preset,
+            output_mode=output_mode,
+            use_auto_albedo=use_auto_albedo,
+            smoothing_kernel_size=smoothing_kernel_size,
+        )
 
-        # 2. Extract perception inputs from tensors
-        perception = cls._prepare_perception_inputs(kwargs, params)
+        # 2. Apply preset overrides via dataclasses.replace
+        proc_params = cls._apply_preset(proc_params, preset)
 
         # 3. Setup batch processing
         batch_size = image.shape[0]
@@ -354,25 +344,6 @@ class PaintByNumberNode(io.ComfyNode):
         processor = ImageProcessor()
         renderer = PBNRenderer()
 
-        n_colors_param = params.get("num_colors", 0)
-        proc_params = ProcessingParameters(
-            num_colors=n_colors_param if n_colors_param > 0 else None,
-            simplification=params.get("simplification", 1.0),
-            use_ciede2000=params.get("use_ciede2000", True),
-            use_palette_merge=params.get("use_palette_merge", True),
-            ciede2000_merge_thresh=params.get("ciede2000_merge_thresh", 10.0),
-            use_thin_cleanup=params.get("use_thin_cleanup", True),
-            min_region_width=params.get("min_region_width", 5),
-            use_shared_borders=params.get("use_shared_borders", True),
-            label_mode=params.get("label_mode", "polylabel"),
-            use_bezier_smooth=params.get("use_bezier_smooth", False),
-            perception=perception,
-            preset=params.get("preset", "balanced"),
-            output_mode=params.get("output_mode", "colored"),
-            use_auto_albedo=params.get("use_auto_albedo", False),
-            smoothing_kernel_size=params.get("smoothing_kernel_size", 9),
-        )
-
         # 4. Batch loop
         for i in range(batch_size):
             if batch_size > 1:
@@ -381,15 +352,34 @@ class PaintByNumberNode(io.ComfyNode):
             img_tensor = image[i]
             h, w, _ = img_tensor.shape
 
+            # Slice the batch tensors to the i-th frame before decoding
+            lineart_i = lineart[i : i + 1] if lineart is not None else None
+            seg_i = segmentation[i : i + 1] if segmentation is not None else None
+
+            # Decode per-frame perception inputs
+            perception_i = cls._prepare_perception_inputs_for_frame(
+                lineart_i,
+                seg_i,
+                lineart_strength=lineart_strength,
+                subject_priority=subject_priority,
+                material_weight=material_weight,
+                edge_influence=edge_influence,
+                segmentation_format=segmentation_format,
+                invert_lineart=invert_lineart,
+            )
+
+            # Build per-frame params with frame-specific perception
+            proc_params_i = dataclasses.replace(proc_params, perception=perception_i)
+
             # Convert to OpenCV BGR
             img_bgr = cls._torch_to_bgr(img_tensor)
 
             # Process
-            result = processor.process_array(img_bgr, proc_params, api=api)
+            result = processor.process_array(img_bgr, proc_params_i, api=api)
 
-            # Render
-            output_mode = params.get("output_mode", "colored")
-            if output_mode == "quantized":
+            # Render keyed exactly on the frame-specific output_mode
+            output_mode_resolved = proc_params_i.output_mode
+            if output_mode_resolved == "quantized":
                 result_bgr = result.quantized
             else:
                 result_bgr = renderer.render(
@@ -398,10 +388,10 @@ class PaintByNumberNode(io.ComfyNode):
                     result.color_palette,
                     w,
                     h,
-                    mode=output_mode,
+                    mode=output_mode_resolved,
                     region_colors=result.region_colors,
                     shared_borders=result.shared_borders,
-                    use_shared_borders=params.get("use_shared_borders", True),
+                    use_shared_borders=proc_params_i.use_shared_borders,
                 )
 
             # Convert back to torch RGB
@@ -426,28 +416,29 @@ class PaintByNumberNode(io.ComfyNode):
 
         return io.NodeOutput(final_image, out_svg, out_colors, ui=ui_output)
 
-    @staticmethod
-    def _resolve_presets(kwargs: dict[str, Any]) -> dict[str, Any]:
-        """Resolves preset overrides into a final parameter dictionary."""
-        params = kwargs.copy()
-        preset = kwargs.get("preset", "balanced")
-
+    @classmethod
+    def _apply_preset(cls, params: ProcessingParameters, preset: str) -> ProcessingParameters:
+        """Applies preset overrides directly to a ProcessingParameters dataclass."""
         if preset != "custom" and preset in PRESETS:
             overrides = PRESETS[preset]
-            params.update(overrides)
-
-            if preset == "portrait":
-                params["use_auto_albedo"] = True
-
-        return params
+            return dataclasses.replace(params, preset=preset, **overrides)
+        return dataclasses.replace(params, preset=preset)
 
     @classmethod
-    def _prepare_perception_inputs(cls, kwargs: dict[str, Any], params: dict[str, Any]) -> PerceptionInputs | None:
-        """Decodes various input tensors into the PerceptionInputs structure."""
-        lineart_np = cls._decode_lineart(kwargs.get("lineart"), kwargs.get("invert_lineart", False))
-        segmentation_np = cls._decode_segmentation(
-            kwargs.get("segmentation"), kwargs.get("segmentation_format", "auto")
-        )
+    def _prepare_perception_inputs_for_frame(
+        cls,
+        lineart_t: torch.Tensor | None,
+        seg_t: torch.Tensor | None,
+        lineart_strength: float,
+        subject_priority: float,
+        material_weight: float,
+        edge_influence: float,
+        segmentation_format: str,
+        invert_lineart: bool,
+    ) -> PerceptionInputs | None:
+        """Decodes frame-specific input tensors into the PerceptionInputs structure."""
+        lineart_np = cls._decode_lineart(lineart_t, invert_lineart)
+        segmentation_np = cls._decode_segmentation(seg_t, segmentation_format)
 
         has_perception = any(x is not None for x in [segmentation_np, lineart_np])
 
@@ -458,10 +449,10 @@ class PaintByNumberNode(io.ComfyNode):
             albedo=None,  # Handled internally in pipeline now
             segmentation_mask=segmentation_np,
             lineart=lineart_np,
-            lineart_strength=kwargs.get("lineart_strength", 0.7),
-            subject_priority=kwargs.get("subject_priority", 2.0),
-            material_weight=kwargs.get("material_weight", 0.5),
-            edge_influence=kwargs.get("edge_influence", 0.3),
+            lineart_strength=lineart_strength,
+            subject_priority=subject_priority,
+            material_weight=material_weight,
+            edge_influence=edge_influence,
         )
 
     @staticmethod

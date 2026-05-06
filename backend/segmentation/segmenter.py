@@ -9,7 +9,7 @@ import cv2
 import networkx as nx
 import numpy as np
 import skimage.color
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Polygon
 
 from ..models import RegionData
 from ..utils.color import cv_to_std_lab
@@ -525,24 +525,38 @@ class RegionSegmenter:
             if self.edge_weight_map.shape[:2] != (h, w):
                 self.edge_weight_map = cv2.resize(self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR)
 
-        # Initialize region colors mapping
-        region_colors: dict[int, int] = {}
-
         # High-quality PBNify-inspired segmentation
         color_id_matrix = self._create_color_id_matrix(quantized, colors)
         smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
-        segmented, region_colors = self._get_regions_pbnify(smoothed)
+        segmented, initial_region_colors = self._get_regions_pbnify(smoothed)
 
-        # Build adjacency graph
-        adjacency_graph = self.build_adjacency_graph(segmented)
+        # Extract polygons, splitting disjoint island regions
+        regions, region_colors = self._extract_polygons(segmented, initial_region_colors)
 
-        # Apply shared border segmentation
-        shared_borders = self.shared_border_segmentation(segmented)
+        # Rebuild final label matrix from split polygons for accurate border and adjacency scanning
+        final_matrix = self._regions_to_matrix(regions, quantized.shape[:2])
 
-        # Create polygons from segmented regions
-        from shapely.geometry import Polygon
+        # Build adjacency graph and shared borders using the final, fully-split matrix
+        adjacency_graph = self.build_adjacency_graph(final_matrix)
+        shared_borders = self.shared_border_segmentation(final_matrix)
 
+        return RegionData(
+            regions=regions,
+            region_colors=region_colors,
+            shared_borders=shared_borders,
+            adjacency_graph=adjacency_graph,
+            segmented_matrix=final_matrix,
+        )
+
+    def _extract_polygons(
+        self, segmented: np.ndarray, region_colors: dict[int, int]
+    ) -> tuple[dict[int, Polygon], dict[int, int]]:
+        """
+        Extract polygons from segmented label matrix, splitting multi-contour regions (disjoint islands)
+        into their own unique region IDs.
+        """
         regions = {}
+        updated_region_colors = dict(region_colors)
         region_ids = np.unique(segmented)
         region_ids = region_ids[region_ids > 0]
 
@@ -558,7 +572,7 @@ class RegionSegmenter:
 
             if contours:
                 # Track original color for this region set
-                color_idx = region_colors[region_id]
+                color_idx = updated_region_colors[region_id]
 
                 # Sort contours by area to keep the original ID for the largest part
                 sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -581,17 +595,21 @@ class RegionSegmenter:
                                 else:
                                     # Assign a new unique ID for the island
                                     regions[next_id] = part
-                                    region_colors[next_id] = color_idx
+                                    updated_region_colors[next_id] = color_idx
                                     next_id += 1
                                 # Mark as processed so we don't repeat this part if i=0 but MultiPolygon
                                 i = 999
                     except Exception:
                         continue
+        return regions, updated_region_colors
 
-        return RegionData(
-            regions=regions,
-            region_colors=region_colors,
-            shared_borders=shared_borders,
-            adjacency_graph=adjacency_graph,
-            segmented_matrix=segmented,
-        )
+    def _regions_to_matrix(self, regions: dict[int, Polygon], shape: tuple[int, int]) -> np.ndarray:
+        """
+        Rasterize final polygon dict back to an integer matrix.
+        Each polygon is drawn using its region ID as the pixel value.
+        """
+        matrix = np.zeros(shape, dtype=np.int32)
+        for region_id, polygon in regions.items():
+            pts = np.array(polygon.exterior.coords, dtype=np.int32)
+            cv2.fillPoly(matrix, [pts], int(region_id))
+        return matrix

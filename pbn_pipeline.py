@@ -12,7 +12,6 @@ from .backend.quantization.quantizer import ColorQuantizer
 from .backend.segmentation.segmenter import RegionSegmenter
 from .backend.svg_generation.svg_generator import SVGGenerator
 from .backend.vectorization.vectorizer import Vectorizer
-from .pbn_renderer import PBNRenderer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -27,8 +26,9 @@ class ImageProcessor:
         """Initialize the image processor with all module instances."""
         self.preprocessor = Preprocessor()
         self.quantizer = ColorQuantizer()
+        self.segmenter = RegionSegmenter()
+        self.vectorizer = Vectorizer()
         self.svg_generator = SVGGenerator()
-        self.renderer = PBNRenderer()
 
     def process_array(self, image_bgr: cv2.Mat, params: ProcessingParameters, api=None) -> SVGResult:
         """
@@ -94,23 +94,22 @@ class ImageProcessor:
             if api:
                 api.execution.set_progress(4, 6)
 
-            segmenter = RegionSegmenter(
-                use_ciede2000=p.use_ciede2000,
-                use_thin_cleanup=p.use_thin_cleanup,
-                min_region_width=p.min_region_width,
-                edge_weight_map=edge_map,
-                lineart_strength=edge_strength,
-                smoothing_kernel_size=p.smoothing_kernel_size,
-                min_region_size=p.min_region_size,
-            )
-            region_data = segmenter.segment(quantized, palette.colors)
+            self.segmenter.use_ciede2000 = p.use_ciede2000
+            self.segmenter.use_thin_cleanup = p.use_thin_cleanup
+            self.segmenter.min_region_width = p.min_region_width
+            self.segmenter.edge_weight_map = edge_map
+            self.segmenter.lineart_strength = edge_strength
+            self.segmenter.smoothing_kernel_size = p.smoothing_kernel_size
+            self.segmenter.min_region_size = p.min_region_size
+
+            region_data = self.segmenter.segment(quantized, palette.colors)
 
             # Stage 5: Vectorization
             logger.info("Stage 5/6: Vectorizing regions")
             if api:
                 api.execution.set_progress(5, 6)
-            vectorizer = Vectorizer(use_bezier_smooth=p.use_bezier_smooth)
-            vectorized_regions = vectorizer.vectorize(region_data, p.simplification)
+            self.vectorizer.use_bezier_smooth = p.use_bezier_smooth
+            vectorized_regions = self.vectorizer.vectorize(region_data, p.simplification)
 
             # Stage 5: Vectorization - Skip speckle removal as it causes coverage gaps
             # The new majority smoothing logic already handles noise effectively.
@@ -136,26 +135,11 @@ class ImageProcessor:
                 region_colors=renumbered_colors,
                 shared_borders=region_data.shared_borders,
                 use_shared_borders=p.use_shared_borders,
-                print_mode=(p.output_mode == "print_svg"),
+                print_mode=(p.output_mode in ("outline", "print_svg")),
             )
 
             if api:
                 api.execution.set_progress(6, 6)
-
-            # Create final high-fidelity preview using the official renderer
-            # This ensures the preview is 100% faithful to the deliverable, including gap sealing
-            h, w = quantized.shape[:2]
-            final_preview = self.renderer.render(
-                cleaned_regions,
-                label_data,
-                palette,
-                w,
-                h,
-                mode="colored",
-                region_colors=renumbered_colors,
-                shared_borders=region_data.shared_borders,
-                use_shared_borders=p.use_shared_borders,
-            )
 
             processing_time = time.time() - start_time
 
@@ -167,7 +151,7 @@ class ImageProcessor:
                 label_count=len(label_data.positions),
                 cleaned_regions=cleaned_regions,
                 label_data=label_data,
-                quantized=final_preview,
+                quantized=quantized,
                 region_colors=renumbered_colors,
                 shared_borders=region_data.shared_borders,
             )

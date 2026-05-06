@@ -21,7 +21,7 @@ class ColorQuantizer:
     def __init__(
         self,
         use_palette_merge: bool = True,
-        ciede2000_merge_thresh: float = 8.0,
+        ciede2000_merge_thresh: float = 10.0,
         use_ciede2000: bool = True,
     ):
         """Initialize quantizer with default parameters."""

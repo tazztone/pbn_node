@@ -45,7 +45,7 @@ class ProcessingParameters:
     # Advanced parameters
     use_ciede2000: bool = True
     use_palette_merge: bool = True
-    ciede2000_merge_thresh: float = 8.0
+    ciede2000_merge_thresh: float = 10.0
     use_thin_cleanup: bool = True
     min_region_width: int = 5
     use_shared_borders: bool = True
