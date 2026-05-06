@@ -14,23 +14,27 @@ def main():
 
     # Parse our custom flags and separate them from pytest args
     pytest_args = []
-    run_quality = False
+    run_quality_only = False
+    run_all = False
 
     for arg in sys.argv[1:]:
         if arg == "--quality":
-            run_quality = True
+            run_quality_only = True
         elif arg == "--all":
-            run_quality = True
+            run_all = True
         else:
             pytest_args.append(arg)
 
     if pytest_args:
         args.extend(pytest_args)
     else:
-        # Default run: only fast unit and integration tests
-        args.extend(["unit", "integration"])
-        if run_quality:
-            args.append("quality")
+        if run_all:
+            args.extend(["unit", "integration", "quality"])
+        elif run_quality_only:
+            args.extend(["quality"])
+        else:
+            # Default: only run fast unit and integration tests
+            args.extend(["unit", "integration"])
 
     print(f"Executing: {' '.join(args)}")
 
