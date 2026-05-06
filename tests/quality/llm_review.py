@@ -8,15 +8,20 @@ import urllib.request
 
 class LLMReviewer:
     """
-    Handles LLM-based visual critique of PBN results with local caching.
+    Handles LLM-based visual critique of PBN results with local LRU-eviction caching.
     """
 
     def __init__(
-        self, api_key: str, api_base: str = "https://openrouter.ai/api/v1", model: str = "google/gemini-2.0-flash-001"
+        self,
+        api_key: str,
+        api_base: str = "https://openrouter.ai/api/v1",
+        model: str = "google/gemini-2.0-flash-001",
+        max_cache_size: int = 100,
     ):
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
+        self.max_cache_size = max_cache_size
         self.cache_path = os.path.join(os.path.dirname(__file__), ".llm_cache.json")
         self.cache = self._load_cache()
 
@@ -41,15 +46,24 @@ class LLMReviewer:
     ) -> str | None:
         """
         Submits image for review, returns critique text or None on failure.
+        Maintains LRU order and size eviction.
         """
         img_hash = self._get_image_hash(img_bytes)
         cache_key = f"{img_hash}_{self.model}_{prompt_type}"
 
+        # If cache hit, update access order (LRU)
         if cache_key in self.cache:
-            return self.cache[cache_key]
+            val = self.cache.pop(cache_key)
+            self.cache[cache_key] = val
+            self._save_cache()
+            return val
 
         critique = self._query_llm(img_bytes, mime_type, prompt_type)
         if critique:
+            # Evict oldest entry if size limit reached
+            if len(self.cache) >= self.max_cache_size:
+                oldest_key = next(iter(self.cache))
+                self.cache.pop(oldest_key)
             self.cache[cache_key] = critique
             self._save_cache()
             return critique

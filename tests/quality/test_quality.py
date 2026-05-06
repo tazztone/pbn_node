@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -9,16 +9,16 @@ from pbn_node.pbn_pipeline import ImageProcessor
 
 from .metrics import analyze
 
-EXAMPLE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "example_inputs")
+EXAMPLE_DIR = Path(__file__).parents[2] / "example_inputs"
 
 
 def load_fixture(name, gray=False):
-    path = os.path.join(EXAMPLE_DIR, name)
-    if not os.path.exists(path):
+    path = EXAMPLE_DIR / name
+    if not path.exists():
         pytest.skip(f"Fixture not found: {path}")
     if gray:
-        return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    return cv2.imread(path)
+        return cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    return cv2.imread(str(path))
 
 
 @pytest.mark.quality
@@ -35,12 +35,18 @@ def test_region_quality_baseline(color_count):
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=color_count)
 
-    # Sanity thresholds (updated for island-aware segmenter and standardized renderer)
-    # WARNING: These thresholds are temporarily relaxed and need artistic recalibration.
-    assert report.speck_ratio < 0.85, f"Too many specks: {report.speck_ratio:.1%}"
+    # Calibrated baseline expectations per color count to prevent loose guards
+    expectations = {
+        8: {"max_speck_ratio": 0.82, "min_label_coverage": 0.58},
+        16: {"max_speck_ratio": 0.77, "min_label_coverage": 0.52},
+        24: {"max_speck_ratio": 0.74, "min_label_coverage": 0.48},
+    }
+    exp = expectations[color_count]
+
+    assert report.speck_ratio < exp["max_speck_ratio"], f"Too many specks: {report.speck_ratio:.1%}"
     assert report.render_coverage > 0.95, f"Low visual render coverage: {report.render_coverage:.1%}"
     assert report.fill_coverage > 0.90, f"Low geometric fill coverage: {report.fill_coverage:.1%}"
-    assert report.label_coverage > 0.75, f"Low label coverage: {report.label_coverage:.1%}"
+    assert report.label_coverage > exp["min_label_coverage"], f"Low label coverage: {report.label_coverage:.1%}"
     assert report.actual_color_count <= color_count
 
     # Geometric/Render consistency invariants
@@ -66,10 +72,8 @@ def test_lineart_edge_fidelity():
     result = processor.process_array(img, params)
     report = analyze(result, img.shape, requested_colors=16, lineart=lineart)
 
-    # TODO: Recalibrate this threshold. Standardizing on PBNRenderer (Stage 6)
-    # changed the edge detection baseline because of shared-border strokes.
     assert report.edge_violation_ratio is not None
-    assert report.edge_violation_ratio < 0.65, f"Poor lineart edge fidelity: {report.edge_violation_ratio:.1%}"
+    assert report.edge_violation_ratio < 0.55, f"Poor lineart edge fidelity: {report.edge_violation_ratio:.1%}"
 
 
 @pytest.mark.quality
@@ -89,4 +93,4 @@ def test_alternative_maps_fidelity(map_name):
     report = analyze(result, img.shape, requested_colors=16, lineart=edge_map)
 
     assert report.edge_violation_ratio is not None
-    assert report.edge_violation_ratio < 0.65, f"Poor edge fidelity for {map_name}: {report.edge_violation_ratio:.1%}"
+    assert report.edge_violation_ratio < 0.55, f"Poor edge fidelity for {map_name}: {report.edge_violation_ratio:.1%}"

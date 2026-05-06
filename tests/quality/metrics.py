@@ -10,6 +10,8 @@ import numpy as np
 
 from pbn_node.backend.models import SVGResult
 
+LINEART_EDGE_THRESHOLD = 0.5
+
 
 @dataclass
 class QualityReport:
@@ -82,7 +84,8 @@ def analyze(
     fill_coverage = np.count_nonzero(fill_mask) / total_pixels
 
     # 2. Render coverage: Visual solidness (matches PBNRenderer logic)
-    # Includes shared borders with thickness=2 to seal gaps
+    # Start with a copy of the pure geometric fill mask, then draw shared border strokes.
+    # Because borders are added, render_coverage will always be equal to or greater than fill_coverage.
     render_mask = fill_mask.copy()
     if result.shared_borders:
         for _rid, borders in result.shared_borders.items():
@@ -104,8 +107,8 @@ def analyze(
         if len(resized_lineart.shape) == 3:
             resized_lineart = cv2.cvtColor(resized_lineart, cv2.COLOR_BGR2GRAY)
 
-        # Binary mask of strong lineart edges (tightened to 0.5)
-        strong_edges = (resized_lineart > 0.5).astype(np.uint8)
+        # Binary mask of strong lineart edges (tightened to threshold)
+        strong_edges = (resized_lineart > LINEART_EDGE_THRESHOLD).astype(np.uint8)
 
         # Detect edges in output quantized preview
         preview = result.quantized

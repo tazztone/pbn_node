@@ -1,36 +1,23 @@
 import argparse
 import csv
-import os
 import sys
 import time
 from datetime import datetime
 
+# Initialize paths and ComfyUI mocks via local bootstrap import
 import cv2
+import metrics  # noqa: E402
 import numpy as np
-
-# Add project root and its parent to path
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-parent_dir = os.path.dirname(root_dir)
-for p in [root_dir, parent_dir]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-# Mock ComfyUI
-from tests.mock_comfyui import install_comfyui_mocks  # noqa: E402
-
-install_comfyui_mocks()
+import visuals  # noqa: E402
+from bootstrap import EXAMPLE_DIR, OUT_DIR
 
 from pbn_node.backend.models import ProcessingParameters  # noqa: E402
 from pbn_node.pbn_pipeline import ImageProcessor  # noqa: E402
-from tests.quality.metrics import analyze  # noqa: E402
 
-OUT_DIR = os.path.join(root_dir, "tests", "quality", "output")
-os.makedirs(OUT_DIR, exist_ok=True)
-LOG_FILE = os.path.join(OUT_DIR, "iteration_log.csv")
+LOG_FILE = OUT_DIR / "iteration_log.csv"
 
 
 def run_iteration(args, img, simplification, smoothing, tag_suffix=""):
-    h, w = img.shape[:2]
     tag = f"{args.tag}{tag_suffix}"
 
     # 1. Process
@@ -51,92 +38,65 @@ def run_iteration(args, img, simplification, smoothing, tag_suffix=""):
     elapsed = time.time() - start_time
 
     # 2. Analyze
-    report = analyze(result, img.shape, requested_colors=args.colors)
+    report = metrics.analyze(result, img.shape, requested_colors=args.colors)
 
-    # 3. Create Diagnostic Panels
-    max_w = 1200
-    scale = min(1.0, max_w / w)
-    dw, dh = int(w * scale), int(h * scale)
-
-    def res(image):
-        return cv2.resize(image, (dw, dh), interpolation=cv2.INTER_AREA)
-
-    # Panel 1: Source
-    p1 = res(img)
-    cv2.putText(p1, "SOURCE", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-    # Panel 2: Result
-    p2 = res(result.quantized)
-    cv2.putText(p2, "RESULT", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-    # Panel 3: Gap Map (Using render_coverage logic)
-    # Highlight unfilled pixels (black in quantized)
-    p3_res = res(result.quantized)
-    p3_img = res(img)
-    p3_gap_mask = np.all(p3_res == 0, axis=2)
-    p3 = (p3_img * 0.2).astype(np.uint8)
-    p3[p3_gap_mask] = [0, 0, 255]
-    cv2.putText(p3, "GAP MAP (RED)", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-    # Panel 4: Boundary Overlay
-    boundary_overlay = result.quantized.copy()
-    for _rid, poly in result.cleaned_regions.items():
-        pts = np.array(poly.exterior.coords, dtype=np.int32)
-        cv2.polylines(boundary_overlay, [pts], True, (0, 255, 0), 1)
-    p4 = res(boundary_overlay)
-    cv2.putText(p4, "VECTOR OVERLAY", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-    # Assemble Grid
-    top = np.hstack((p1, p2))
-    bottom = np.hstack((p3, p4))
-    grid = np.vstack((top, bottom))
-
-    # Info Bar
-    bar_h = 80
-    bar = np.zeros((bar_h, grid.shape[1], 3), dtype=np.uint8)
-    metrics_text = (
-        f"Tag: {tag} | Regions: {report.total_regions} | "
-        f"Fill(Geo): {report.fill_coverage:.2%} | Render: {report.render_coverage:.2%} | "
-        f"Speck: {report.speck_ratio:.1%} | Time: {elapsed:.2f}s"
-    )
-    settings_text = (
-        f"Params: colors={args.colors}, simpl={simplification}, "
-        f"smooth={smoothing}, min_w={args.min_width}, "
-        f"min_reg={args.min_region_size}"
+    # 3. Create Diagnostic Panels via visuals module
+    final_img, p3 = visuals.build_diagnostic_grid(
+        img=img,
+        result=result,
+        report=report,
+        elapsed=elapsed,
+        colors=args.colors,
+        simplification=simplification,
+        smoothing=smoothing,
+        min_width=args.min_width,
+        min_region_size=args.min_region_size,
+        tag=tag,
     )
 
-    cv2.putText(bar, metrics_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)
-    cv2.putText(bar, settings_text, (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-
-    final_img = np.vstack((grid, bar))
-
-    # 4. Save and Log
-    out_path = os.path.join(OUT_DIR, f"iter_{tag}.png")
-    cv2.imwrite(out_path, final_img)
+    # 4. Save Image
+    out_path = OUT_DIR / f"iter_{tag}.png"
+    cv2.imwrite(str(out_path), final_img)
     print(f"SAVED: {out_path}")
 
-    # Log to CSV
-    log_exists = os.path.exists(LOG_FILE)
+    # 5. Log to CSV with Schema Verification
+    expected_header = [
+        "Timestamp",
+        "Tag",
+        "Image",
+        "Colors",
+        "Simpl",
+        "Smooth",
+        "MinW",
+        "MinReg",
+        "Regions",
+        "Fill_Geo",
+        "Render",
+        "Speck",
+        "Time",
+    ]
+
+    if LOG_FILE.exists():
+        try:
+            with open(LOG_FILE) as f:
+                reader = csv.reader(f)
+                existing_header = next(reader, None)
+            if existing_header != expected_header:
+                backup_path = LOG_FILE.with_name(f"iteration_log_backup_{int(time.time())}.csv")
+                LOG_FILE.rename(backup_path)
+                print(f"WARNING: CSV schema mismatch detected. Archived old log to {backup_path}")
+        except Exception as e:
+            print(f"WARNING: Could not validate CSV schema ({e}). Re-creating log file.")
+            try:
+                LOG_FILE.unlink()
+            except Exception:
+                pass
+
+    log_exists = LOG_FILE.exists()
     with open(LOG_FILE, "a", newline="") as f:
         writer = csv.writer(f)
         if not log_exists:
-            writer.writerow(
-                [
-                    "Timestamp",
-                    "Tag",
-                    "Image",
-                    "Colors",
-                    "Simpl",
-                    "Smooth",
-                    "MinW",
-                    "MinReg",
-                    "Regions",
-                    "Fill_Geo",
-                    "Render",
-                    "Speck",
-                    "Time",
-                ]
-            )
+            writer.writerow(expected_header)
         writer.writerow(
             [
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -155,7 +115,7 @@ def run_iteration(args, img, simplification, smoothing, tag_suffix=""):
             ]
         )
 
-    return report, p3  # Return report and the gap map panel for sweep grid
+    return report, p3
 
 
 def main():
@@ -170,13 +130,12 @@ def main():
     parser.add_argument("--sweep", action="store_true", help="Run a parameter sweep grid")
     args = parser.parse_args()
 
-    # 1. Load Image
-    img_path = os.path.join(root_dir, "example_inputs", args.image)
-    if not os.path.exists(img_path):
+    img_path = EXAMPLE_DIR / args.image
+    if not img_path.exists():
         print(f"ERROR: Image not found at {img_path}")
         sys.exit(1)
 
-    img = cv2.imread(img_path)
+    img = cv2.imread(str(img_path))
 
     if not args.sweep:
         run_iteration(args, img, args.simplification, args.smoothing)
@@ -203,8 +162,8 @@ def main():
             sweep_panels.append(np.hstack(row_panels))
 
         sweep_grid = np.vstack(sweep_panels)
-        sweep_out = os.path.join(OUT_DIR, f"sweep_{args.tag}.png")
-        cv2.imwrite(sweep_out, sweep_grid)
+        sweep_out = OUT_DIR / f"sweep_{args.tag}.png"
+        cv2.imwrite(str(sweep_out), sweep_grid)
         print(f"\nSWEEP COMPLETE. Grid saved to: {sweep_out}")
 
 
