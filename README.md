@@ -1,154 +1,101 @@
-# ComfyUI paint by number
+# ComfyUI Paint by Number
 
-ComfyUI paint by number transforms your digital images into high-quality,
-printable paint-by-number templates. It lets you generate vector-aligned regions
-with accurate labels directly within your ComfyUI workflows.
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom%20node-orange)](https://github.com/comfyanonymous/ComfyUI)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Lint](https://img.shields.io/badge/lint-ruff-purple)](https://docs.astral.sh/ruff/)
 
-## Features
+A ComfyUI custom node that transforms digital images into high-quality, printable paint-by-number templates. Generates vector-aligned color regions with accurate numbering directly inside your ComfyUI workflows.
 
-This node provides several advanced tools for creating paint-by-number assets.
-It's built on a modular backend that ensures high performance and reliable
-results.
+## Tech Stack
 
-- **V3 API support:** Built on the modern ComfyUI V3 API for better performance
-  and compatibility.
-- **Fast smoothing:** A vectorized majority filter provides real-time region
-  smoothing even on high-resolution images.
-- **Multiple output modes:** You can choose between colored previews,
-  print-ready outlines, or raw quantized views. Colored previews now accurately
-  reflect paint numbers and shared color identity across regions.
-- **Automatic color detection:** The node automatically selects the optimal
-  number of colors for your image if you don't specify a count.
-- **SVG export:** Generates raw SVG content that you can use in vector editing
-  software like Inkscape or Adobe Illustrator.
-- **Vector preview:** Real-time, resolution-independent SVG preview directly
-  within the ComfyUI node body.
-- **Perception stack:** Support for segmentation masks and lineart maps
-  to guide color quantization and boundary detection.
-- **Auto-albedo:** Integrated Retinex-based shadow removal to estimate clean
-  material colors when external maps are missing.
-- **Modular Backend:** A decoupled, test-driven architecture that ensures
-  stability and allows for easy extension of processing stages.
-- **Quality Feedback Loop:** Specialized testing infrastructure that uses
-  computational geometry and edge fidelity metrics to ensure artistic
-  consistency and prevent regressions.
+| Layer | Technology |
+|---|---|
+| Runtime | Python 3.10+ |
+| ComfyUI API | V3 Node API |
+| Color quantization | scikit-learn (K-Means / auto-detect) |
+| Image processing | OpenCV, NumPy (vectorized majority filter) |
+| SVG output | Custom SVG renderer with inline vector preview |
+| Shadow removal | Retinex-based auto-albedo |
+| Linting | Ruff |
+| Type checking | Mypy |
+| Testing | pytest |
+| Dependency management | uv + pip |
+
+## Architecture
+
+```
+pbn_node/
+├── __init__.py             # ComfyUI node registration
+├── node.py                 # Main V3 node class — inputs, outputs, execute()
+├── pipeline/
+│   ├── quantizer.py        # Color quantization + auto-color detection
+│   ├── smoother.py         # Vectorized majority filter (fast region smoothing)
+│   ├── labeler.py          # Region numbering and paint label assignment
+│   ├── albedo.py           # Retinex-based shadow removal (auto-albedo)
+│   └── renderer.py         # SVG + raster output renderer
+├── tests/
+│   ├── run_tests.py        # Test runner wrapper (required for mock loading)
+│   └── TESTING.md          # Testing infrastructure docs
+└── requirements.txt
+```
+
+The pipeline is fully decoupled: each stage (quantize → smooth → label → render) is independently testable. A quality feedback loop uses computational geometry and edge fidelity metrics to catch regressions in artistic output.
+
+## Node Inputs
+
+| Input | Type | Description |
+|---|---|---|
+| `image` | IMAGE | Input image tensor |
+| `segmentation` | IMAGE (optional) | Mask/segmentation map — proportional color budget allocation |
+| `lineart` | IMAGE (optional) | Edge map (Canny, HED) — prevents color bleeding across boundaries |
+| `num_colors` | INT | Color clusters (0 = auto-detect) |
+| `simplification` | FLOAT | Contour simplification factor (0.5–2.0) |
+| `output_mode` | ENUM | `colored` / `outline` / `quantized` |
+| `preset` | ENUM | `fast` / `balanced` / `portrait` / `custom` |
+| `subject_priority` | FLOAT | Color budget multiplier for non-background segments |
+| `material_weight` | FLOAT | Albedo influence over original photo during quantization |
+| `edge_influence` | FLOAT | Lineart bias on color quantization boundaries |
+| `use_auto_albedo` | BOOL | Auto-estimate shadow-free albedo when no external map is provided |
+
+## Node Outputs
+
+| Output | Type | Description |
+|---|---|---|
+| `IMAGE` | IMAGE | Rendered raster template |
+| `SVG` | STRING | Raw SVG data (also previewed inline on the node) |
+| `COLOR_COUNT` | INT | Total unique colors in the final template |
 
 ## Installation
 
-To install the node, follow these steps. Note that this project requires Python
-3.10 or higher.
+**Requirements:** Python 3.10+
 
-1.  Navigate to your ComfyUI custom nodes directory:
-    ```bash
-    cd ComfyUI/custom_nodes
-    ```
-2.  Clone this repository:
-    ```bash
-    git clone https://github.com/tazztone/pbn_node
-    ```
-3.  Install the required Python dependencies:
-    ```bash
-    pip install -r pbn_node/requirements.txt
-    ```
-
-<!-- prettier-ignore -->
-> [!NOTE]
-> You must restart ComfyUI after installation for the node to appear in the
-> menu.
-
-## Usage
-
-You can find the node in the ComfyUI menu under **image** > **process** >
-**Paint By Number**. It integrates with other image processing nodes.
-
-### Inputs
-
-The node accepts configuration parameters to fine-tune the result.
-
-- **image:** The input image tensor you want to process.
-- **segmentation:** Optional segmentation or mask image. When provided, the node
-  allocates color budgets proportionally to the detected regions.
-- **lineart:** Optional edge map (for example, from Canny or HED). This prevents color
-  regions from bleeding across semantic boundaries.
-- **num_colors:** The number of color clusters to use (default: 24). Set this
-  to `0` to enable automatic detection.
-- **simplification:** Controls how much the region contours are simplified.
-  Accepted values range from `0.5` to `2.0`.
-- **output_mode:** Selects the visual style of the output image (**colored**,
-  **outline**, or **quantized**).
-- **preset:** Quick configurations for different use cases (**fast**,
-  **balanced**, **portrait**, or **custom**).
-- **subject_priority:** A multiplier for color allocation to non-background
-  segments when using a segmentation mask.
-- **material_weight:** Controls the influence of the internal albedo estimate
-  over the original photo during quantization.
-- **edge_influence:** Controls how much the lineart edge map biases color
-  quantization. High values ensure color boundaries follow edges.
-- **segmentation_format:** How to interpret the segmentation map (`auto`,
-  `grayscale`, or `rgb_packed`).
-- **use_auto_albedo:** When enabled, automatically estimates a shadow-free
-  albedo map if no external albedo is provided.
-
-### Outputs
-
-The node returns three values that you can use in your workflow.
-
-- **IMAGE:** The rendered raster template based on your selected output mode.
-- **SVG:** A string containing the raw SVG data for the generated template. This
-  result is also previewed as a vector graphic within the node UI.
-- **COLOR_COUNT:** An integer representing the total number of unique colors in
-  the final template.
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/tazztone/pbn_node
+pip install -r pbn_node/requirements.txt
+# Restart ComfyUI — node appears under Image > Process > Paint By Number
+```
 
 ## Development
 
-We use modern static analysis tools to maintain code quality. If you want to
-contribute to the project, we recommend using `uv` to run these tools without
-manual installation.
-
-### Linting and formatting
-
-We use `ruff` for linting and code formatting. You can run these checks using
-the following commands:
-
 ```bash
+# Lint & format
 uvx ruff check .
 uvx ruff format .
-```
 
-### Type checking
-
-We use `mypy` for static type checking to catch potential logic errors early.
-Run it with this command:
-
-```bash
+# Type check
 uvx mypy .
-```
 
-### Pre-commit hooks
-
-We use `pre-commit` to automatically run linting, formatting, and type checking
-before each commit. To set up the hooks, install `pre-commit` and run the
-installation command:
-
-```bash
-pip install pre-commit
-pre-commit install
-```
-
-### Automated testing
-
-We use `pytest` for unit and integration testing. To ensure all mocks load
-correctly, you must run tests using the provided wrapper script:
-
-```bash
+# Tests (must use wrapper script)
 ../../venv/bin/python tests/run_tests.py
+
+# Pre-commit hooks (auto-runs all checks)
+pip install pre-commit && pre-commit install
 ```
 
-For more details on the testing infrastructure, see
-[tests/TESTING.md](tests/TESTING.md).
+See [tests/TESTING.md](tests/TESTING.md) for testing infrastructure details.
 
 ## License
 
-
-This project is licensed under the MIT License. See the `LICENSE` file for
-details.
+MIT — see [LICENSE](LICENSE).
