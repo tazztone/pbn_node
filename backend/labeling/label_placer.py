@@ -129,6 +129,9 @@ class LabelPlacer:
         Returns:
             True if region is too small for a label
         """
+        if polygon is None or not polygon.is_valid or polygon.is_empty:
+            return True
+
         return bool(polygon.area < self.min_region_area)
 
     def inscribed_circle_radius(self, polygon: Polygon) -> float:
