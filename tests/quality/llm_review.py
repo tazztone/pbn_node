@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -17,11 +18,15 @@ class LLMReviewer:
         api_base: str = "https://openrouter.ai/api/v1",
         model: str = "google/gemini-2.0-flash-001",
         max_cache_size: int = 100,
+        ttl_seconds: int = 60 * 60 * 24 * 30,  # 30 days
+        max_cache_kb: int = 1024,
     ):
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
         self.max_cache_size = max_cache_size
+        self.ttl_seconds = ttl_seconds
+        self.max_cache_kb = max_cache_kb
         self.cache_path = os.path.join(os.path.dirname(__file__), ".llm_cache.json")
         self.cache = self._load_cache()
 
@@ -29,15 +34,33 @@ class LLMReviewer:
         if os.path.exists(self.cache_path):
             try:
                 with open(self.cache_path) as f:
-                    return json.load(f)
+                    data = json.load(f)
+
+                now = time.time()
+                clean_cache = {}
+                for k, v in data.items():
+                    # Migration and TTL check
+                    if isinstance(v, dict) and "content" in v and "timestamp" in v:
+                        if now - v["timestamp"] < self.ttl_seconds:
+                            clean_cache[k] = v
+                    elif isinstance(v, str):
+                        # Migrate old format
+                        clean_cache[k] = {"content": v, "timestamp": now}
+                return clean_cache
             except Exception:
                 return {}
         return {}
 
     def _save_cache(self):
-        # TODO: Consider adding time-based expiration (TTL) or automatic file-size
-        # limit checks in addition to the current LRU size-based eviction strategy
-        # to ensure the cache file remains small and clean.
+        # Ensure file-size limits by evicting oldest entries if needed
+        while self.cache and self.max_cache_kb > 0:
+            cache_str = json.dumps(self.cache, indent=2)
+            if len(cache_str.encode("utf-8")) <= self.max_cache_kb * 1024:
+                break
+            # Evict oldest (first key in dict, since we maintain LRU order)
+            oldest_key = next(iter(self.cache))
+            self.cache.pop(oldest_key)
+
         with open(self.cache_path, "w") as f:
             json.dump(self.cache, f, indent=2)
 
@@ -49,25 +72,29 @@ class LLMReviewer:
     ) -> str | None:
         """
         Submits image for review, returns critique text or None on failure.
-        Maintains LRU order and size eviction.
+        Maintains LRU order and size/TTL eviction.
         """
         img_hash = self._get_image_hash(img_bytes)
         cache_key = f"{img_hash}_{self.model}_{prompt_type}"
 
-        # If cache hit, update access order (LRU)
+        now = time.time()
+        # If cache hit, check TTL and update access order (LRU)
         if cache_key in self.cache:
-            val = self.cache.pop(cache_key)
-            self.cache[cache_key] = val
-            self._save_cache()
-            return val
+            entry = self.cache.pop(cache_key)
+            if now - entry["timestamp"] < self.ttl_seconds:
+                self.cache[cache_key] = entry
+                self._save_cache()
+                return entry["content"]
+            # If expired, we don't put it back, so it's effectively evicted
 
         critique = self._query_llm(img_bytes, mime_type, prompt_type)
         if critique:
-            # Evict oldest entry if size limit reached
+            # Evict oldest entry if size limit reached (count-based)
             if len(self.cache) >= self.max_cache_size:
                 oldest_key = next(iter(self.cache))
                 self.cache.pop(oldest_key)
-            self.cache[cache_key] = critique
+
+            self.cache[cache_key] = {"content": critique, "timestamp": now}
             self._save_cache()
             return critique
         return None
