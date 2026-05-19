@@ -225,18 +225,24 @@ class LabelPlacer:
                         if 0 <= py2 < h and 0 <= px2 < w and self._exclusion_mask[py2, px2] > 0:
                             # 2. Grid search within bounding box for a "clear" interior point
                             minx, miny, maxx, maxy = polygon.bounds
-                            # Sample 10x10 grid
+                            # Sample 10x10 grid with vectorized mask filtering (cheap check first)
+                            xs, ys = np.linspace(minx, maxx, 10), np.linspace(miny, maxy, 10)
+                            gx_grid, gy_grid = np.meshgrid(xs, ys, indexing="ij")
+                            pts = np.stack([gx_grid.ravel(), gy_grid.ravel()], axis=1)
+
+                            # Fast NumPy filter: check image bounds and exclusion mask
+                            ix, iy = pts[:, 0].astype(int), pts[:, 1].astype(int)
+                            valid = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
+                            is_clear = np.zeros(len(pts), dtype=bool)
+                            is_clear[valid] = self._exclusion_mask[iy[valid], ix[valid]] == 0
+
                             found_clear = False
-                            for gx in np.linspace(minx, maxx, 10):
-                                for gy in np.linspace(miny, maxy, 10):
-                                    gp = Point(gx, gy)
-                                    if polygon.contains(gp):
-                                        igx, igy = int(gx), int(gy)
-                                        if 0 <= igy < h and 0 <= igx < w and self._exclusion_mask[igy, igx] == 0:
-                                            label_position = gp
-                                            found_clear = True
-                                            break
-                                if found_clear:
+                            # Expensive geometric check only on candidates in "clear" zones
+                            for cand in pts[is_clear]:
+                                gp = Point(cand[0], cand[1])
+                                if polygon.contains(gp):
+                                    label_position = gp
+                                    found_clear = True
                                     break
 
                             if not found_clear:
