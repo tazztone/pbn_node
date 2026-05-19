@@ -349,17 +349,19 @@ class PaintByNumberNode(io.ComfyNode):
             if batch_size > 1:
                 logger.info(f"Processing image {i + 1}/{batch_size}")
 
-            img_tensor = image[i]
-            h, w, _ = img_tensor.shape
-
-            # Slice the batch tensors to the i-th frame before decoding
+            # Slice the batch tensors to the i-th frame
+            img_i = image[i]
             lineart_i = lineart[i : i + 1] if lineart is not None else None
             seg_i = segmentation[i : i + 1] if segmentation is not None else None
 
-            # Decode per-frame perception inputs
-            perception_i = cls._prepare_perception_inputs_for_frame(
+            result_tensor, svg_content, color_count = cls._execute_single(
+                img_i,
                 lineart_i,
                 seg_i,
+                processor,
+                renderer,
+                api,
+                proc_params,
                 lineart_strength=lineart_strength,
                 subject_priority=subject_priority,
                 material_weight=material_weight,
@@ -368,39 +370,9 @@ class PaintByNumberNode(io.ComfyNode):
                 invert_lineart=invert_lineart,
             )
 
-            # Build per-frame params with frame-specific perception
-            proc_params_i = dataclasses.replace(proc_params, perception=perception_i)
-
-            # Convert to OpenCV BGR
-            img_bgr = cls._torch_to_bgr(img_tensor)
-
-            # Process
-            result = processor.process_array(img_bgr, proc_params_i, api=api)
-
-            # Render keyed exactly on the frame-specific output_mode
-            output_mode_resolved = proc_params_i.output_mode
-            if output_mode_resolved == "quantized":
-                result_bgr = result.quantized
-            else:
-                result_bgr = renderer.render(
-                    result.cleaned_regions,
-                    result.label_data,
-                    result.color_palette,
-                    w,
-                    h,
-                    mode=output_mode_resolved,
-                    region_colors=result.region_colors,
-                    shared_borders=result.shared_borders,
-                    use_shared_borders=proc_params_i.use_shared_borders,
-                )
-
-            # Convert back to torch RGB
-            result_rgb = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2RGB)
-            result_tensor = torch.from_numpy(result_rgb.astype(np.float32) / 255.0)
-
             result_images.append(result_tensor)
-            svg_contents.append(result.svg_content)
-            color_counts.append(result.color_palette.color_count)
+            svg_contents.append(svg_content)
+            color_counts.append(color_count)
 
         # 5. Finalize outputs
         final_image = torch.stack(result_images, dim=0)
@@ -415,6 +387,70 @@ class PaintByNumberNode(io.ComfyNode):
         out_colors = color_counts if batch_size > 1 else color_counts[0]
 
         return io.NodeOutput(final_image, out_svg, out_colors, ui=ui_output)
+
+    @classmethod
+    def _execute_single(
+        cls,
+        img_tensor,
+        lineart_t,
+        seg_t,
+        processor,
+        renderer,
+        api,
+        proc_params,
+        lineart_strength,
+        subject_priority,
+        material_weight,
+        edge_influence,
+        segmentation_format,
+        invert_lineart,
+    ):
+        """Processes a single image frame."""
+        h, w, _ = img_tensor.shape
+
+        # Decode per-frame perception inputs
+        perception_i = cls._prepare_perception_inputs_for_frame(
+            lineart_t,
+            seg_t,
+            lineart_strength=lineart_strength,
+            subject_priority=subject_priority,
+            material_weight=material_weight,
+            edge_influence=edge_influence,
+            segmentation_format=segmentation_format,
+            invert_lineart=invert_lineart,
+        )
+
+        # Build per-frame params with frame-specific perception
+        proc_params_i = dataclasses.replace(proc_params, perception=perception_i)
+
+        # Convert to OpenCV BGR
+        img_bgr = cls._torch_to_bgr(img_tensor)
+
+        # Process
+        result = processor.process_array(img_bgr, proc_params_i, api=api)
+
+        # Render keyed exactly on the frame-specific output_mode
+        output_mode_resolved = proc_params_i.output_mode
+        if output_mode_resolved == "quantized":
+            result_bgr = result.quantized
+        else:
+            result_bgr = renderer.render(
+                result.cleaned_regions,
+                result.label_data,
+                result.color_palette,
+                w,
+                h,
+                mode=output_mode_resolved,
+                region_colors=result.region_colors,
+                shared_borders=result.shared_borders,
+                use_shared_borders=proc_params_i.use_shared_borders,
+            )
+
+        # Convert back to torch RGB
+        result_rgb = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2RGB)
+        result_tensor = torch.from_numpy(result_rgb.astype(np.float32) / 255.0)
+
+        return result_tensor, result.svg_content, result.color_palette.color_count
 
     @classmethod
     def _apply_preset(cls, params: ProcessingParameters, preset: str) -> ProcessingParameters:
