@@ -544,7 +544,7 @@ class PaintByNumberNode(io.ComfyNode):
         temp_dir = folder_paths.get_temp_directory()
 
         for content in svg_contents:
-            content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()[:16]
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
             filename = f"pbn_{content_hash}.svg"
             filepath = os.path.join(temp_dir, filename)
 
