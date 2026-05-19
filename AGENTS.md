@@ -6,6 +6,7 @@
 
 ## Commands
 - Test: `../../venv/bin/python tests/run_tests.py`
+- *Note: The `../../venv` path assumes this repository is located within `ComfyUI/custom_nodes/` and uses the ComfyUI virtual environment.*
 
 ## Non-obvious conventions
 - **Mocks**: Always use `run_tests.py`; it loads ComfyUI mocks in `tests/conftest.py`.
