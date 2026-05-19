@@ -87,8 +87,8 @@ class TestPaintByNumberNode:
                 # Should be exactly the same due to hashing
                 assert fname1 == fname2
 
-                # Verify filename structure: pbn_<md5_hex_16>.svg
-                expected_hash = hashlib.md5(b"<svg>deterministic test</svg>").hexdigest()[:16]
+                # Verify filename structure: pbn_<sha256_hex_16>.svg
+                expected_hash = hashlib.sha256(b"<svg>deterministic test</svg>").hexdigest()[:16]
                 assert fname1 == f"pbn_{expected_hash}.svg"
 
             # Verify only one file exists despite two "writes"
