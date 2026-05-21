@@ -95,6 +95,55 @@ class LabelPlacer:
         # Fallback to centroid
         return working_polygon.centroid
 
+    def _find_fallback_position(self, polygon: Polygon) -> Point:
+        """
+        Find an alternative label position when the initial position is on an exclusion line.
+        Tries the centroid first, then a grid search within the bounding box,
+        and finally the representative point as a last resort.
+
+        Args:
+            polygon: Input polygon
+
+        Returns:
+            Point representing a fallback label position
+        """
+        if self._exclusion_mask is None:
+            return polygon.representative_point()
+
+        h, w = self._exclusion_mask.shape[:2]
+
+        # 1. Centroid (if not already used)
+        label_position = polygon.centroid
+        px, py = int(label_position.x), int(label_position.y)
+        if 0 <= py < h and 0 <= px < w and self._exclusion_mask[py, px] > 0:
+            # 2. Grid search within bounding box for a "clear" interior point
+            minx, miny, maxx, maxy = polygon.bounds
+            # Sample 10x10 grid with vectorized mask filtering (cheap check first)
+            xs, ys = np.linspace(minx, maxx, 10), np.linspace(miny, maxy, 10)
+            gx_grid, gy_grid = np.meshgrid(xs, ys, indexing="ij")
+            pts = np.stack([gx_grid.ravel(), gy_grid.ravel()], axis=1)
+
+            # Fast NumPy filter: check image bounds and exclusion mask
+            ix, iy = pts[:, 0].astype(int), pts[:, 1].astype(int)
+            valid = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
+            is_clear = np.zeros(len(pts), dtype=bool)
+            is_clear[valid] = self._exclusion_mask[iy[valid], ix[valid]] == 0
+
+            found_clear = False
+            # Expensive geometric check only on candidates in "clear" zones
+            for cand in pts[is_clear]:
+                gp = Point(cand[0], cand[1])
+                if polygon.contains(gp):
+                    label_position = gp
+                    found_clear = True
+                    break
+
+            if not found_clear:
+                # 3. Last resort: force representative_point even if on line
+                label_position = polygon.representative_point()
+
+        return label_position
+
     def calculate_font_size(self, polygon: Polygon) -> int:
         """
         Calculate appropriate font size for region.
@@ -218,36 +267,8 @@ class LabelPlacer:
                     px, py = int(label_position.x), int(label_position.y)
                     h, w = self._exclusion_mask.shape[:2]
                     if 0 <= py < h and 0 <= px < w and self._exclusion_mask[py, px] > 0:
-                        # Position is on a line! Try fallback chain:
-                        # 1. Centroid (if not already used)
-                        label_position = polygon.centroid
-                        px2, py2 = int(label_position.x), int(label_position.y)
-                        if 0 <= py2 < h and 0 <= px2 < w and self._exclusion_mask[py2, px2] > 0:
-                            # 2. Grid search within bounding box for a "clear" interior point
-                            minx, miny, maxx, maxy = polygon.bounds
-                            # Sample 10x10 grid with vectorized mask filtering (cheap check first)
-                            xs, ys = np.linspace(minx, maxx, 10), np.linspace(miny, maxy, 10)
-                            gx_grid, gy_grid = np.meshgrid(xs, ys, indexing="ij")
-                            pts = np.stack([gx_grid.ravel(), gy_grid.ravel()], axis=1)
-
-                            # Fast NumPy filter: check image bounds and exclusion mask
-                            ix, iy = pts[:, 0].astype(int), pts[:, 1].astype(int)
-                            valid = (ix >= 0) & (ix < w) & (iy >= 0) & (iy < h)
-                            is_clear = np.zeros(len(pts), dtype=bool)
-                            is_clear[valid] = self._exclusion_mask[iy[valid], ix[valid]] == 0
-
-                            found_clear = False
-                            # Expensive geometric check only on candidates in "clear" zones
-                            for cand in pts[is_clear]:
-                                gp = Point(cand[0], cand[1])
-                                if polygon.contains(gp):
-                                    label_position = gp
-                                    found_clear = True
-                                    break
-
-                            if not found_clear:
-                                # 3. Last resort: force representative_point even if on line
-                                label_position = polygon.representative_point()
+                        # Position is on a line! Try fallback chain
+                        label_position = self._find_fallback_position(polygon)
 
                 # Calculate font size
                 font_size = self.calculate_font_size(polygon)
