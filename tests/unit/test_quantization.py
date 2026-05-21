@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from pbn_node.backend.quantization.quantizer import ColorQuantizer
 
 

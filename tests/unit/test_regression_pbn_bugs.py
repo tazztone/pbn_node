@@ -1,5 +1,4 @@
 import numpy as np
-
 from pbn_node.backend.models import PerceptionInputs
 from pbn_node.backend.quantization.quantizer import ColorQuantizer
 

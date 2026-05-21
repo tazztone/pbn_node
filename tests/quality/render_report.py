@@ -17,10 +17,9 @@ import numpy as np  # noqa: E402
 from bootstrap import EXAMPLE_DIR, OUT_DIR  # noqa: E402
 from llm_review import LLMReviewer  # noqa: E402
 from metrics import QualityReport, analyze  # noqa: E402
-from visuals import img_to_b64  # noqa: E402
-
 from pbn_node.backend.models import PerceptionInputs, ProcessingParameters  # noqa: E402
 from pbn_node.pbn_pipeline import ImageProcessor  # noqa: E402
+from visuals import img_to_b64  # noqa: E402
 
 
 class RunConfig(TypedDict):

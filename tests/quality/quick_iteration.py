@@ -13,7 +13,6 @@ bootstrap.setup()
 import metrics  # noqa: E402
 import visuals  # noqa: E402
 from bootstrap import EXAMPLE_DIR, OUT_DIR  # noqa: E402
-
 from pbn_node.backend.models import ProcessingParameters  # noqa: E402
 from pbn_node.pbn_pipeline import ImageProcessor  # noqa: E402
 

@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
-from shapely.geometry import Polygon
-
 from pbn_node.backend.labeling.label_placer import LabelPlacer
 from pbn_node.backend.segmentation.segmenter import RegionSegmenter
+from shapely.geometry import Polygon
 
 
 @pytest.mark.unit
