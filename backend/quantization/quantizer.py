@@ -313,19 +313,18 @@ class ColorQuantizer:
                 if n <= 1 or (target_k > 0 and n <= target_k):
                     break
 
-                # Optimize: Pre-calculate distance matrix would be better, but pairwise is simpler
-                # For small N (palette size), this is acceptable.
-                best_dist = float("inf")
-                best_pair = (-1, -1)
+                # Vectorized pairwise distance calculation
+                # Calculate all pairwise distances at once
+                dists = skimage.color.deltaE_ciede2000(std_centers[:, np.newaxis, :], std_centers[np.newaxis, :, :])
 
-                for i in range(n):
-                    for j in range(i + 1, n):
-                        dist = skimage.color.deltaE_ciede2000(
-                            std_centers[i][np.newaxis, :], std_centers[j][np.newaxis, :]
-                        )[0]
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_pair = (i, j)
+                # Mask out the lower triangle and diagonal
+                idx = np.tril_indices(n)
+                dists[idx] = np.inf
+
+                min_idx = np.argmin(dists)
+                i, j = divmod(min_idx, n)
+                best_dist = dists[i, j]
+                best_pair = (int(i), int(j))
 
                 if target_k == 0 and best_dist > current_thresh:
                     break
