@@ -343,19 +343,13 @@ class Vectorizer:
         # Number of segments = ceil((n-1)/3).
         # We'll just step by 3 until we cover the loop and wrap back to the start.
 
-        for i in range(0, n, 3):
-            # The control points wrap around the polygon naturally
-            p0 = coords[i % n]
-            p1 = coords[(i + 1) % n]
-            p2 = coords[(i + 2) % n]
-            p3 = coords[(i + 3) % n]
+        # Pad coordinates to avoid modulo operations in the loop
+        padded_coords = np.concatenate((coords, coords[:3]))
 
-            nodes = np.asfortranarray(
-                [
-                    [p0[0], p1[0], p2[0], p3[0]],
-                    [p0[1], p1[1], p2[1], p3[1]],
-                ]
-            )
+        for i in range(0, n, 3):
+            # Extract the 4 control points using slicing
+            chunk = padded_coords[i : i + 4]
+            nodes = np.asfortranarray(chunk.T)
 
             try:
                 curve = bezier.Curve(nodes, degree=3)
@@ -367,7 +361,7 @@ class Vectorizer:
                 # Actually, always appending [:-1] gives a seamless closed contour loop.
                 smoothed_coords.extend(points[:-1].tolist())
             except Exception:
-                smoothed_coords.extend([p0.tolist(), p1.tolist(), p2.tolist()])
+                smoothed_coords.extend(chunk[:3].tolist())
 
         # Close the loop perfectly back to the start vertex
         if len(smoothed_coords) > 0:
