@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-
 from pbn_node.backend.models import SVGResult
 
 LINEART_EDGE_THRESHOLD = 0.5

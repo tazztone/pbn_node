@@ -3,7 +3,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-
 from pbn_node.backend.models import PerceptionInputs, ProcessingParameters
 from pbn_node.pbn_pipeline import ImageProcessor
 

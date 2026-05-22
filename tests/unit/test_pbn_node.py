@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-
 from pbn_node.pbn_node import PaintByNumberNode
 
 

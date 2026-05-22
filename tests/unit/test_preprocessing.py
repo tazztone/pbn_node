@@ -1,5 +1,4 @@
 import pytest
-
 from pbn_node.backend.preprocessing.preprocessor import Preprocessor
 
 
