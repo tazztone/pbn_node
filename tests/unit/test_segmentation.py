@@ -39,6 +39,30 @@ def test_direct_color_segmentation(quantized_mock):
 
 
 @pytest.mark.unit
+def test_direct_color_segmentation_single_color():
+    """Test segmentation with a single color image to ensure base case (1 region) is handled."""
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    img[:, :] = [255, 0, 0]  # Red
+
+    # Use standard LAB colors like in direct_color_segmentation
+    colors = np.array(
+        [
+            cv2.cvtColor(np.array([[[255, 0, 0]]], dtype=np.uint8), cv2.COLOR_BGR2LAB)[0, 0],
+        ],
+        dtype=np.float32,
+    )
+
+    segmenter = RegionSegmenter()
+    segmented, region_colors = segmenter.direct_color_segmentation(img, colors)
+
+    assert segmented.shape == (10, 10)
+    assert isinstance(region_colors, dict)
+    assert np.max(segmented) == 1
+    assert len(region_colors) == 1
+    assert list(region_colors.values())[0] == 0
+
+
+@pytest.mark.unit
 def test_build_adjacency_graph():
     # 2x2 image with 2 regions
     regions = np.array([[1, 1], [2, 2]], dtype=np.int32)
