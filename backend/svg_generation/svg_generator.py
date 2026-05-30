@@ -122,6 +122,8 @@ class SVGGenerator:
         svg_parts.append('  <g font-family="Arial, sans-serif" text-anchor="middle" ')
         svg_parts.append('dominant-baseline="middle">\n')
 
+        prec = self.coordinate_precision
+
         for region_id, position in labels.positions.items():
             if region_id in labels.font_sizes:
                 font_size = labels.font_sizes[region_id]
@@ -145,8 +147,8 @@ class SVGGenerator:
                         luminance = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
                         text_color = "#ffffff" if luminance < 128 else "#000000"
 
-                svg_parts.append(f'    <text x="{x:.{self.coordinate_precision}f}" ')
-                svg_parts.append(f'y="{y:.{self.coordinate_precision}f}" ')
+                svg_parts.append(f'    <text x="{x:.{prec}f}" ')
+                svg_parts.append(f'y="{y:.{prec}f}" ')
                 svg_parts.append(f'fill="{text_color}" ')
                 svg_parts.append(f'font-size="{font_size}">{label_text}</text>\n')
 
@@ -253,13 +255,15 @@ class SVGGenerator:
         if not coords:
             return ""
 
+        prec = self.coordinate_precision
+
         # Start path with Move command
         x0, y0 = coords[0][0], coords[0][1]
-        path_parts = [f"M {x0:.{self.coordinate_precision}f},{y0:.{self.coordinate_precision}f}"]
+        path_parts = [f"M {x0:.{prec}f},{y0:.{prec}f}"]
 
         # Add Line commands for remaining points
         for x, y in coords[1:]:
-            path_parts.append(f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}")
+            path_parts.append(f" L {x:.{prec}f},{y:.{prec}f}")
 
         # Close path
         path_parts.append(" Z")
@@ -274,10 +278,12 @@ class SVGGenerator:
         if not coords:
             return ""
 
+        prec = self.coordinate_precision
+
         x0, y0 = coords[0][0], coords[0][1]
-        path_parts = [f"M {x0:.{self.coordinate_precision}f},{y0:.{self.coordinate_precision}f}"]
+        path_parts = [f"M {x0:.{prec}f},{y0:.{prec}f}"]
 
         for x, y in coords[1:]:
-            path_parts.append(f" L {x:.{self.coordinate_precision}f},{y:.{self.coordinate_precision}f}")
+            path_parts.append(f" L {x:.{prec}f},{y:.{prec}f}")
 
         return "".join(path_parts)
