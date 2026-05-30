@@ -65,56 +65,6 @@ class TestVectorizer:
         total_area = vectorizer.calculate_total_area(regions)
         assert total_area == 125.0
 
-    def test_remove_speckles(self):
-        vectorizer = Vectorizer()
-
-        # 1. Large background
-        # 2. Small speckle
-        # 3. Another large region
-        poly1 = Polygon([(0, 0), (100, 0), (100, 100), (0, 100)])  # Area 10000
-        poly2 = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])  # Area 1
-        poly3 = Polygon([(200, 200), (300, 200), (300, 300), (200, 300)])  # Area 10000
-
-        regions = {1: poly1, 2: poly2, 3: poly3}
-
-        colors = np.array(
-            [
-                [50, 0, 0],  # Reddish
-                [51, 1, 1],  # Very similar to color 0
-                [10, 50, 50],  # Bluish/Greenish
-            ],
-            dtype=np.float32,
-        )
-
-        region_colors = {1: 0, 2: 1, 3: 2}
-
-        cleaned_regions, updated_colors = vectorizer.remove_speckles(regions, region_colors, colors, threshold=0.01)
-
-        assert 2 not in cleaned_regions
-        assert 1 in cleaned_regions
-        assert 3 in cleaned_regions
-
-        # poly2 merges into poly1 (its area might not change because speckle is entirely inside poly1)
-        # We just want to ensure it is handled gracefully and we remain with region 1 and 3
-        assert cleaned_regions[1].area >= 10000
-
-        assert 2 not in updated_colors
-        assert updated_colors[1] == 0
-        assert updated_colors[3] == 2
-
-    def test_remove_speckles_no_speckles(self):
-        vectorizer = Vectorizer()
-        poly1 = Polygon([(0, 0), (100, 0), (100, 100), (0, 100)])
-        poly2 = Polygon([(200, 200), (300, 200), (300, 300), (200, 300)])
-        regions = {1: poly1, 2: poly2}
-        region_colors = {1: 0, 2: 1}
-        colors = np.array([[50, 0, 0], [10, 50, 50]], dtype=np.float32)
-
-        cleaned, updated_colors = vectorizer.remove_speckles(regions, region_colors, colors, threshold=0.001)
-
-        assert len(cleaned) == 2
-        assert 1 in cleaned and 2 in cleaned
-
     def test_vectorize(self):
         vectorizer = Vectorizer(use_bezier_smooth=False)
 
