@@ -6,7 +6,6 @@ and speckle removal.
 import heapq
 from typing import cast
 
-import cv2
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
@@ -35,19 +34,6 @@ class Vectorizer:
         """
         self.speckle_threshold = 0.0005  # 0.05% of total area
         self.use_bezier_smooth = use_bezier_smooth
-
-    def find_contours(self, region_mask: np.ndarray) -> list[np.ndarray]:
-        """
-        Find contours using OpenCV.
-
-        Args:
-            region_mask: Binary mask for a single region
-
-        Returns:
-            List of contours as numpy arrays
-        """
-        contours, _ = cv2.findContours(region_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return cast(list[np.ndarray], contours)
 
     def visvalingam_whyatt(self, contour: np.ndarray, tolerance: float) -> np.ndarray:
         """

@@ -21,13 +21,9 @@ def test_processing_parameters_ciede2000_merge_thresh_validation():
     ProcessingParameters(ciede2000_merge_thresh=20.0)
 
     # Test invalid ciede2000_merge_thresh
-    with pytest.raises(
-        ValueError, match="ciede2000_merge_thresh must be between 2.0 and 20.0"
-    ):
+    with pytest.raises(ValueError, match="ciede2000_merge_thresh must be between 2.0 and 20.0"):
         ProcessingParameters(ciede2000_merge_thresh=1.99)
-    with pytest.raises(
-        ValueError, match="ciede2000_merge_thresh must be between 2.0 and 20.0"
-    ):
+    with pytest.raises(ValueError, match="ciede2000_merge_thresh must be between 2.0 and 20.0"):
         ProcessingParameters(ciede2000_merge_thresh=20.01)
 
 
@@ -43,6 +39,7 @@ def test_processing_parameters_min_region_width_validation():
         ProcessingParameters(min_region_width=1)
     with pytest.raises(ValueError, match="min_region_width must be between 2 and 20"):
         ProcessingParameters(min_region_width=21)
+
 
 @pytest.mark.unit
 def test_processing_parameters_num_colors_validation():

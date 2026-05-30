@@ -7,23 +7,6 @@ from shapely.geometry import Polygon
 
 @pytest.mark.unit
 class TestVectorizer:
-    def test_find_contours_simple_rectangle(self):
-        vectorizer = Vectorizer()
-        mask = np.zeros((100, 100), dtype=np.uint8)
-        mask[20:80, 20:80] = 255
-        contours = vectorizer.find_contours(mask)
-
-        assert len(contours) == 1
-        assert isinstance(contours[0], np.ndarray)
-        # cv2.findContours on a rectangle with CHAIN_APPROX_SIMPLE yields 4 points
-        assert len(contours[0]) == 4
-
-    def test_find_contours_empty(self):
-        vectorizer = Vectorizer()
-        mask = np.zeros((100, 100), dtype=np.uint8)
-        contours = vectorizer.find_contours(mask)
-        assert len(contours) == 0
-
     def test_visvalingam_whyatt_no_simplification(self):
         vectorizer = Vectorizer()
         # A simple 4-point square
