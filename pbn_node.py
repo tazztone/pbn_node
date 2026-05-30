@@ -1,3 +1,4 @@
+import concurrent.futures
 import dataclasses
 import hashlib
 import logging
@@ -538,21 +539,27 @@ class PaintByNumberNode(io.ComfyNode):
         )
 
     @staticmethod
+    def _write_single_svg(args: tuple[str, str]) -> dict[str, str]:
+        content, temp_dir = args
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        filename = f"pbn_{content_hash}.svg"
+        filepath = os.path.join(temp_dir, filename)
+
+        # Only write if file doesn't exist to avoid redundant I/O
+        if not os.path.exists(filepath):
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        return {"filename": filename, "subfolder": "", "type": "temp"}
+
+    @staticmethod
     def _save_svg_batch(svg_contents: list[str]) -> list[dict[str, str]]:
-        """Saves SVGs to temp directory using content-addressed hashing."""
-        svg_results = []
+        """Saves SVGs to temp directory using content-addressed hashing and a thread pool."""
         temp_dir = folder_paths.get_temp_directory()
+        args_list = [(content, temp_dir) for content in svg_contents]
 
-        for content in svg_contents:
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-            filename = f"pbn_{content_hash}.svg"
-            filepath = os.path.join(temp_dir, filename)
-
-            # Only write if file doesn't exist to avoid redundant I/O
-            if not os.path.exists(filepath):
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
-
-            svg_results.append({"filename": filename, "subfolder": "", "type": "temp"})
+        # Use a ThreadPoolExecutor to prevent synchronous I/O blocking
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            svg_results = list(executor.map(PaintByNumberNode._write_single_svg, args_list))
 
         return svg_results
