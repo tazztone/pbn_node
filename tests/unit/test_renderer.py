@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
-from shapely.geometry import Point, Polygon
-
 from pbn_node.backend.models import ColorPalette, LabelData
 from pbn_node.pbn_renderer import PBNRenderer
+from shapely.geometry import Point, Polygon
 
 
 class TestPBNRenderer:

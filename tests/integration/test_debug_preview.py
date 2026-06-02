@@ -2,7 +2,6 @@ import os
 
 import cv2
 import numpy as np
-
 from pbn_node.backend.models import ProcessingParameters
 from pbn_node.pbn_pipeline import ImageProcessor
 

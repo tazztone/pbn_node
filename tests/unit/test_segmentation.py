@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 import pytest
-
 from pbn_node.backend.segmentation.segmenter import RegionSegmenter
 
 
@@ -26,16 +25,27 @@ def quantized_mock():
 
 
 @pytest.mark.unit
-def test_direct_color_segmentation(quantized_mock):
-    img, colors = quantized_mock
-    segmenter = RegionSegmenter()
-    segmented, region_colors = segmenter.direct_color_segmentation(img, colors)
+def test_segment_single_color():
+    """Test segmentation with a single color image to ensure base case (1 region) is handled."""
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    img[:, :] = [255, 0, 0]  # Red
 
-    assert segmented.shape == (100, 100)
-    assert isinstance(region_colors, dict)
-    # Since it's a simple image, it should find at least 3 regions
-    assert np.max(segmented) >= 1
-    assert len(region_colors) == np.max(segmented)
+    # Use standard LAB colors
+    colors = np.array(
+        [
+            cv2.cvtColor(np.array([[[255, 0, 0]]], dtype=np.uint8), cv2.COLOR_BGR2LAB)[0, 0],
+        ],
+        dtype=np.float32,
+    )
+
+    segmenter = RegionSegmenter()
+    region_data = segmenter.segment(img, colors)
+
+    assert region_data.segmented_matrix.shape == (10, 10)
+    assert isinstance(region_data.region_colors, dict)
+    assert np.max(region_data.segmented_matrix) == 1
+    assert len(region_data.region_colors) == 1
+    assert list(region_data.region_colors.values())[0] == 0
 
 
 @pytest.mark.unit

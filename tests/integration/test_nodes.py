@@ -1,6 +1,5 @@
 import pytest
 import torch
-
 from pbn_node.pbn_node import PaintByNumberNode
 
 

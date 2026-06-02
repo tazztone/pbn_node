@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 import pytest
-
 from pbn_node.backend.preprocessing.retinex import multiscale_retinex
 
 

@@ -154,93 +154,6 @@ class Vectorizer:
         else:
             return np.array(simplified_points)
 
-    def remove_speckles(
-        self,
-        regions: dict[int, Polygon],
-        region_colors: dict[int, int],
-        colors: np.ndarray,
-        threshold: float = 0.001,
-    ) -> tuple[dict[int, Polygon], dict[int, int]]:
-        """
-        Remove speckle regions smaller than threshold.
-
-        Merges small regions into their nearest neighbor based on LAB color distance.
-
-        Args:
-            regions: Dictionary of region ID to Polygon
-            region_colors: Mapping of region ID to color index
-            colors: Color centers in LAB space
-            threshold: Area threshold as fraction of total area (default 0.1%)
-
-        Returns:
-            Tuple of (cleaned_regions, updated_region_colors)
-        """
-        # Calculate total area
-        total_area = self.calculate_total_area(regions)
-        min_area = total_area * threshold
-
-        # Identify speckles
-        speckles = []
-        large_regions = {}
-
-        for region_id, polygon in regions.items():
-            if polygon.area < min_area:
-                speckles.append((region_id, polygon))
-            else:
-                large_regions[region_id] = polygon
-
-        # If no large regions, keep everything
-        if not large_regions:
-            return regions, region_colors
-
-        # Merge each speckle into nearest neighbor by color distance
-        for speckle_id, speckle_polygon in speckles:
-            if speckle_id not in region_colors:
-                continue
-
-            speckle_color_idx = region_colors[speckle_id]
-            speckle_color = colors[speckle_color_idx]
-
-            # Find nearest neighbor by LAB color distance
-            min_distance = float("inf")
-            nearest_id = None
-
-            for region_id in large_regions.keys():
-                if region_id not in region_colors:
-                    continue
-
-                region_color_idx = region_colors[region_id]
-                region_color = colors[region_color_idx]
-                distance = float(np.linalg.norm(speckle_color - region_color))
-
-                if distance < min_distance:
-                    min_distance = distance
-                    nearest_id = region_id
-
-            # Merge speckle into nearest neighbor
-            if nearest_id is not None:
-                try:
-                    # Union the polygons
-                    merged = unary_union([large_regions[nearest_id], speckle_polygon])
-
-                    # Ensure we have a single Polygon
-                    if merged.geom_type == "Polygon" and merged.is_valid:
-                        large_regions[nearest_id] = merged
-                    elif merged.geom_type == "MultiPolygon":
-                        # Take the largest polygon from the multipolygon
-                        largest = max(merged.geoms, key=lambda p: p.area)
-                        if largest.is_valid:
-                            large_regions[nearest_id] = largest
-                except Exception:
-                    # If merge fails, just skip this speckle
-                    pass
-
-            # Remove speckle from region_colors
-            if speckle_id in region_colors:
-                del region_colors[speckle_id]
-
-        return large_regions, region_colors
-
     def calculate_total_area(self, regions: dict[int, Polygon]) -> float:
         """
         Calculate total area of all regions.
@@ -343,19 +256,13 @@ class Vectorizer:
         # Number of segments = ceil((n-1)/3).
         # We'll just step by 3 until we cover the loop and wrap back to the start.
 
-        for i in range(0, n, 3):
-            # The control points wrap around the polygon naturally
-            p0 = coords[i % n]
-            p1 = coords[(i + 1) % n]
-            p2 = coords[(i + 2) % n]
-            p3 = coords[(i + 3) % n]
+        # Pad coordinates to avoid modulo operations in the loop
+        padded_coords = np.concatenate((coords, coords[:3]))
 
-            nodes = np.asfortranarray(
-                [
-                    [p0[0], p1[0], p2[0], p3[0]],
-                    [p0[1], p1[1], p2[1], p3[1]],
-                ]
-            )
+        for i in range(0, n, 3):
+            # Extract the 4 control points using slicing
+            chunk = padded_coords[i : i + 4]
+            nodes = np.asfortranarray(chunk.T)
 
             try:
                 curve = bezier.Curve(nodes, degree=3)
@@ -367,7 +274,7 @@ class Vectorizer:
                 # Actually, always appending [:-1] gives a seamless closed contour loop.
                 smoothed_coords.extend(points[:-1].tolist())
             except Exception:
-                smoothed_coords.extend([p0.tolist(), p1.tolist(), p2.tolist()])
+                smoothed_coords.extend(chunk[:3].tolist())
 
         # Close the loop perfectly back to the start vertex
         if len(smoothed_coords) > 0:

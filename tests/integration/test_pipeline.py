@@ -1,5 +1,4 @@
 import pytest
-
 from pbn_node.backend.models import ProcessingParameters
 from pbn_node.pbn_pipeline import ImageProcessor
 

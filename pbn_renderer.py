@@ -51,6 +51,35 @@ class PBNRenderer:
             # Both "outline" and "print_svg" have white backgrounds
             canvas = np.ones((height, width, 3), dtype=np.uint8) * 255
 
+        self._fill_regions(
+            canvas,
+            regions,
+            palette,
+            is_colored,
+            is_outline_mode,
+            mode,
+            region_colors,
+            shared_borders,
+            use_shared_borders,
+        )
+
+        self._draw_labels(canvas, labels, palette, is_colored, region_colors)
+
+        return canvas
+
+    def _fill_regions(
+        self,
+        canvas: np.ndarray,
+        regions: dict[int, Polygon],
+        palette: ColorPalette,
+        is_colored: bool,
+        is_outline_mode: bool,
+        mode: str,
+        region_colors: dict[int, int] | None,
+        shared_borders: dict[int, list[LineString]] | None,
+        use_shared_borders: bool,
+    ) -> None:
+        """Fill regions and draw borders on the canvas."""
         # 1. Fill regions
         for region_id, polygon in regions.items():
             if is_colored:
@@ -88,7 +117,15 @@ class PBNRenderer:
                     border_pts = np.array(border.coords, dtype=np.int32)
                     cv2.polylines(canvas, [border_pts], False, (0, 0, 0), 1)
 
-        # 3. Draw labels
+    def _draw_labels(
+        self,
+        canvas: np.ndarray,
+        labels: LabelData,
+        palette: ColorPalette,
+        is_colored: bool,
+        region_colors: dict[int, int] | None,
+    ) -> None:
+        """Draw text labels on the canvas."""
         for region_id, point in labels.positions.items():
             if region_id in labels.font_sizes:
                 font_size = labels.font_sizes[region_id]
@@ -126,8 +163,6 @@ class PBNRenderer:
                     1,
                     cv2.LINE_AA,
                 )
-
-        return canvas
 
     @staticmethod
     def _hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
