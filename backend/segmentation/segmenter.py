@@ -8,8 +8,8 @@ from typing import cast
 import cv2
 import networkx as nx
 import numpy as np
-import skimage.color
 from shapely.geometry import LineString, Polygon
+from skimage.color import deltaE_ciede2000
 
 from ..models import RegionData
 from ..utils.color import cv_to_std_lab
@@ -184,7 +184,7 @@ class RegionSegmenter:
             for k in range(k_total):
                 # ciede2000 takes (..., 3) arrays
                 # Ensure the color array has at least 2 dimensions for correct broadcasting
-                dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+                dists[:, k] = deltaE_ciede2000(std_pixels, std_colors[[k]])
         else:
             # Calculate squared Euclidean distances to each color center
             # (H*W, 1, 3) - (1, K, 3) -> (H*W, K, 3) -> sum -> (H*W, K)
