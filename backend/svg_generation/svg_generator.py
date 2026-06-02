@@ -118,6 +118,16 @@ class SVGGenerator:
 
             svg_parts.append("  </g>\n")
 
+        # Precompute text colors for colored mode to avoid redundant calculations per region
+        color_idx_to_text_color: dict[int, str] = {}
+        if not print_mode and region_colors:
+            for color_idx, hex_color in enumerate(colors.hex_colors):
+                h = hex_color.lstrip("#")
+                rgb = [int(h[i : i + 2], 16) for i in (0, 2, 4)]
+                # Relative luminance: 0.299R + 0.587G + 0.114B
+                luminance = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+                color_idx_to_text_color[color_idx] = "#ffffff" if luminance < 128 else "#000000"
+
         # Add labels
         svg_parts.append('  <g font-family="Arial, sans-serif" text-anchor="middle" ')
         svg_parts.append('dominant-baseline="middle">\n')
@@ -140,12 +150,7 @@ class SVGGenerator:
 
                     # For colored mode, ensure text is readable against the background
                     if not print_mode:
-                        hex_color = colors.hex_colors[color_idx]
-                        h = hex_color.lstrip("#")
-                        rgb = [int(h[i : i + 2], 16) for i in (0, 2, 4)]
-                        # Relative luminance: 0.299R + 0.587G + 0.114B
-                        luminance = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
-                        text_color = "#ffffff" if luminance < 128 else "#000000"
+                        text_color = color_idx_to_text_color.get(color_idx, self.default_stroke_color)
 
                 svg_parts.append(f'    <text x="{x:.{prec}f}" ')
                 svg_parts.append(f'y="{y:.{prec}f}" ')
