@@ -8,8 +8,8 @@ from typing import cast
 import cv2
 import networkx as nx
 import numpy as np
-import skimage.color
 from shapely.geometry import LineString, Polygon
+from skimage.color import deltaE_ciede2000
 
 from ..models import RegionData
 from ..utils.color import cv_to_std_lab
@@ -45,36 +45,6 @@ class RegionSegmenter:
         self.lineart_strength = lineart_strength
         self.smoothing_kernel_size = smoothing_kernel_size
         self.min_region_size = min_region_size
-
-    def direct_color_segmentation(self, quantized: np.ndarray, colors: np.ndarray) -> tuple[np.ndarray, dict[int, int]]:
-        """
-        Direct color-based segmentation following pbnify's approach.
-        """
-        h, w = quantized.shape[:2]
-
-        # Ensure edge_weight_map matches the image dimensions
-        if self.edge_weight_map is not None and self.edge_weight_map.shape[:2] != (h, w):
-            self.edge_weight_map = cv2.resize(self.edge_weight_map, (w, h), interpolation=cv2.INTER_LINEAR)
-
-        # Step 1: Convert quantized BGR image to color ID matrix
-        color_id_matrix = self._create_color_id_matrix(quantized, colors)
-
-        # Step 2: Apply a light median filter to remove pixel-level quantization noise
-        if color_id_matrix.max() < 256:
-            color_id_matrix = cv2.medianBlur(color_id_matrix.astype(np.uint8), 3).astype(np.int32)
-
-        # Step 3: Apply vectorized majority filter (smoothing)
-        smoothed = self._smooth_pbnify_vectorized(color_id_matrix)
-
-        # Step 4: Apply pbnify's region extraction (flood-fill + raster merging)
-        regions_matrix, region_colors = self._get_regions_pbnify(smoothed)
-
-        # Diagnostic: check for 0s
-        unassigned = np.count_nonzero(regions_matrix == 0)
-        if unassigned > 0:
-            print(f"DEBUG: Found {unassigned} unassigned pixels in regions_matrix")
-
-        return regions_matrix, region_colors
 
     def _thin_region_cleanup(self, mat: np.ndarray, min_width: int) -> np.ndarray:
         """
@@ -184,7 +154,7 @@ class RegionSegmenter:
             for k in range(k_total):
                 # ciede2000 takes (..., 3) arrays
                 # Ensure the color array has at least 2 dimensions for correct broadcasting
-                dists[:, k] = skimage.color.deltaE_ciede2000(std_pixels, std_colors[[k]])
+                dists[:, k] = deltaE_ciede2000(std_pixels, std_colors[[k]])
         else:
             # Calculate squared Euclidean distances to each color center
             # (H*W, 1, 3) - (1, K, 3) -> (H*W, K, 3) -> sum -> (H*W, K)

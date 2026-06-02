@@ -80,7 +80,6 @@ dependencies.
 | `test_quantize_auto_k` | Automatic k selection (elbow method) |
 | `test_build_adjacency_graph` | Region connectivity mapping |
 | `test_segment_pipeline` | Full segmentation data structure |
-| `test_direct_color_segmentation` | Segmentation mapping to color indices |
 | `test_execute_returns_svg_preview` | Node UI payload verification |
 | `test_svg_filename_determinism` | Hash-based filename consistency |
 | `test_budget_allocation_k_sum` | Perception budget summation |
