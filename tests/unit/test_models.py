@@ -1,6 +1,58 @@
 import pytest
-from pbn_node.backend.models import ProcessingParameters
+from pbn_node.backend.models import ProcessingParameters, PerceptionInputs
 
+
+@pytest.mark.unit
+def test_perception_inputs_material_weight_validation():
+    # Test valid material_weight
+    PerceptionInputs(material_weight=0.0)
+    PerceptionInputs(material_weight=0.5)
+    PerceptionInputs(material_weight=1.0)
+
+    # Test invalid material_weight
+    with pytest.raises(ValueError, match="material_weight must be between 0.0 and 1.0"):
+        PerceptionInputs(material_weight=-0.01)
+    with pytest.raises(ValueError, match="material_weight must be between 0.0 and 1.0"):
+        PerceptionInputs(material_weight=1.01)
+
+@pytest.mark.unit
+def test_perception_inputs_subject_priority_validation():
+    # Test valid subject_priority
+    PerceptionInputs(subject_priority=1.0)
+    PerceptionInputs(subject_priority=2.5)
+    PerceptionInputs(subject_priority=5.0)
+
+    # Test invalid subject_priority
+    with pytest.raises(ValueError, match="subject_priority must be between 1.0 and 5.0"):
+        PerceptionInputs(subject_priority=0.99)
+    with pytest.raises(ValueError, match="subject_priority must be between 1.0 and 5.0"):
+        PerceptionInputs(subject_priority=5.01)
+
+@pytest.mark.unit
+def test_perception_inputs_edge_influence_validation():
+    # Test valid edge_influence
+    PerceptionInputs(edge_influence=0.0)
+    PerceptionInputs(edge_influence=0.5)
+    PerceptionInputs(edge_influence=1.0)
+
+    # Test invalid edge_influence
+    with pytest.raises(ValueError, match="edge_influence must be between 0.0 and 1.0"):
+        PerceptionInputs(edge_influence=-0.01)
+    with pytest.raises(ValueError, match="edge_influence must be between 0.0 and 1.0"):
+        PerceptionInputs(edge_influence=1.01)
+
+@pytest.mark.unit
+def test_perception_inputs_lineart_strength_validation():
+    # Test valid lineart_strength
+    PerceptionInputs(lineart_strength=0.0)
+    PerceptionInputs(lineart_strength=0.5)
+    PerceptionInputs(lineart_strength=1.0)
+
+    # Test invalid lineart_strength
+    with pytest.raises(ValueError, match="lineart_strength must be between 0.0 and 1.0"):
+        PerceptionInputs(lineart_strength=-0.01)
+    with pytest.raises(ValueError, match="lineart_strength must be between 0.0 and 1.0"):
+        PerceptionInputs(lineart_strength=1.01)
 
 @pytest.mark.unit
 def test_processing_parameters_simplification_validation():
