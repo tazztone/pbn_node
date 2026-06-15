@@ -5,9 +5,11 @@ import urllib.request
 
 def check_models():
     api_base = "http://localhost:8888/v1"
-    api_key = os.getenv("UNSLOTH_API_KEY", "sk-no-key-required")
+    api_key = os.getenv("UNSLOTH_API_KEY")
 
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     print(f"Checking models at: {api_base}/models")
     try:
