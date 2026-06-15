@@ -9,7 +9,6 @@ from typing import cast
 import cv2
 import numpy as np
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
 
 from ..models import RegionData
 
