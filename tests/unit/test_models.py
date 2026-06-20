@@ -1,5 +1,5 @@
 import pytest
-from pbn_node.backend.models import ProcessingParameters, PerceptionInputs
+from pbn_node.backend.models import PerceptionInputs, ProcessingParameters
 
 
 @pytest.mark.unit

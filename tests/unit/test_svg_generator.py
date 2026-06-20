@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
-from shapely.geometry import LineString, Point, Polygon
-
 from pbn_node.backend.models import ColorPalette, LabelData
 from pbn_node.backend.svg_generation.svg_generator import SVGGenerator
+from shapely.geometry import LineString, Point, Polygon
 
 
 @pytest.fixture
