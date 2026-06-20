@@ -44,3 +44,26 @@ def test_cv_to_std_lab_type():
     lab = np.zeros((5, 5, 3), dtype=np.uint8)
     std = cv_to_std_lab(lab)
     assert std.dtype == np.float32
+
+
+@pytest.mark.unit
+def test_cv_to_std_lab_invalid_type():
+    with pytest.raises((TypeError, AttributeError)):
+        cv_to_std_lab(None)
+    with pytest.raises((TypeError, AttributeError)):
+        cv_to_std_lab([[[1, 2, 3]]])
+
+
+@pytest.mark.unit
+def test_cv_to_std_lab_missing_channels():
+    lab = np.zeros((5, 5, 2), dtype=np.uint8)
+    with pytest.raises(IndexError):
+        cv_to_std_lab(lab)
+
+
+@pytest.mark.unit
+def test_cv_to_std_lab_empty():
+    lab = np.array([], dtype=np.uint8).reshape(0, 0, 3)
+    std = cv_to_std_lab(lab)
+    assert std.shape == (0, 0, 3)
+    assert std.size == 0
