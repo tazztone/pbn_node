@@ -5,12 +5,14 @@ import urllib.request
 
 def test_text():
     api_base = "http://localhost:8888/v1"
-    api_key = os.getenv("UNSLOTH_API_KEY", "sk-no-key-required")
+    api_key = os.getenv("UNSLOTH_API_KEY")
     model = "llmfan46/Qwen3.6-27B-uncensored-heretic-v2-GGUF"
 
     payload = {"model": model, "messages": [{"role": "user", "content": "Say hello"}], "max_tokens": 10}
 
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     print(f"Testing text prompt at: {api_base}/chat/completions")
     try:
