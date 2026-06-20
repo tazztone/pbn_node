@@ -52,240 +52,246 @@ class PaintByNumberNode(io.ComfyNode):
             category="image/process",
             description="Transforms an image into a paint-by-number template.",
             is_output_node=True,
-            inputs=[
-                io.Image.Input(
-                    "image",
-                    tooltip="The source image to transform. Supports batch processing.",
-                ),
-                io.Image.Input(
-                    "segmentation",
-                    optional=True,
-                    tooltip=(
-                        "Optional segmentation map (e.g., from SAM or Mask2Former). This tells the "
-                        "node where objects start/end, preventing 'color bleeding' and helping to "
-                        "protect important details like faces or hands."
-                    ),
-                ),
-                io.Image.Input(
-                    "lineart",
-                    optional=True,
-                    tooltip=(
-                        "Optional edge map (e.g., from HED, SoftEdge, or Canny preprocessors). "
-                        "This tells the node where strong visual boundaries are, preventing "
-                        "color regions from bleeding across lines. Any single-channel edge "
-                        "map works — wire any 'comfyui_controlnet_aux' preprocessor here."
-                    ),
-                ),
-                io.Float.Input(
-                    "lineart_strength",
-                    default=0.7,
-                    min=0.0,
-                    max=1.0,
-                    step=0.05,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) How strongly the lineart edges influence region boundaries. "
-                        "Higher values create sharper boundaries at edges but may fragment regions."
-                    ),
-                ),
-                io.Int.Input(
-                    "num_colors",
-                    default=24,
-                    min=0,
-                    max=40,
-                    tooltip=(
-                        "How many unique paint pots you want. Use 0 for 'Auto' mode. "
-                        "Beginners should start with 8-12 colors. High-detail projects "
-                        "use 24-30."
-                    ),
-                ),
-                io.Float.Input(
-                    "simplification",
-                    default=1.0,
-                    min=0.5,
-                    max=2.0,
-                    step=0.1,
-                    display_mode=io.NumberDisplay.slider,
-                    tooltip=(
-                        "Controls how 'wiggly' the lines are. Higher values (1.5+) make it "
-                        "easier to paint but lose detail. Lower values (0.5-0.8) keep the "
-                        "photo's shapes more accurately but are much harder to paint."
-                    ),
-                ),
-                io.Combo.Input(
-                    "output_mode",
-                    options=["colored", "outline", "quantized", "print_svg"],
-                    default="colored",
-                    tooltip=(
-                        "'colored': Template with colors and labels; 'outline': Line-art for "
-                        "printing; 'quantized': Posterized test image; 'print_svg': "
-                        "High-quality vector file for large printing."
-                    ),
-                ),
-                io.Combo.Input(
-                    "segmentation_format",
-                    options=["auto", "grayscale", "rgb_packed"],
-                    default="auto",
-                    tooltip=(
-                        "How to interpret the segmentation map. 'auto' tries to detect. "
-                        "'grayscale': single-channel 0–N class labels (SAM, Sapiens). "
-                        "'rgb_packed': RGB image where each unique color = one class."
-                    ),
-                ),
-                io.Combo.Input(
-                    "preset",
-                    options=["fast", "balanced", "portrait", "custom"],
-                    default="balanced",
-                    tooltip=(
-                        "Quick settings: 'portrait' protects faces; 'balanced' is a safe default; "
-                        "'fast' is for quick previews. Use 'custom' to unlock the manual "
-                        "advanced sliders below."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_ciede2000",
-                    default=True,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Uses the industry-standard CIEDE2000 formula which matches "
-                        "colors how human eyes see them (best for skin tones) rather than "
-                        "simple math."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_palette_merge",
-                    default=True,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Automatically combines very similar colors (e.g., two "
-                        "slightly different greys) into one to optimize your paint kit."
-                    ),
-                ),
-                io.Float.Input(
-                    "ciede2000_merge_thresh",
-                    default=10.0,
-                    min=2.0,
-                    max=20.0,
-                    step=0.5,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) How aggressive to be when merging similar colors. Higher "
-                        "values result in a smaller, more condensed palette. Default 10.0."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_thin_cleanup",
-                    default=True,
-                    advanced=True,
-                    tooltip="(Advanced) Removes very thin regions that are difficult to paint.",
-                ),
-                io.Int.Input(
-                    "min_region_width",
-                    default=5,
-                    min=2,
-                    max=20,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Minimum pixel size for a region. Smaller bits will be "
-                        "merged into neighbors to prevent 'confetti' noise in your template."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_shared_borders",
-                    default=True,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Uses shared paths in SVG to prevent 'white gaps' between regions when rendering."
-                    ),
-                ),
-                io.Combo.Input(
-                    "label_mode",
-                    options=["centroid", "polylabel"],
-                    default="polylabel",
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) 'polylabel' ensures numbers are placed in the widest part "
-                        "of complex shapes; 'centroid' uses the exact mathematical center."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_bezier_smooth",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Converts jagged pixel edges into smooth, flowing curves. "
-                        "Gives the template a professional, hand-drawn look."
-                    ),
-                ),
-                io.Float.Input(
-                    "subject_priority",
-                    default=2.0,
-                    min=1.0,
-                    max=5.0,
-                    step=0.1,
-                    advanced=True,
-                    tooltip="(Advanced) Weighting multiplier for the protected subject regions.",
-                ),
-                io.Float.Input(
-                    "material_weight",
-                    default=0.5,
-                    min=0.0,
-                    max=1.0,
-                    step=0.1,
-                    advanced=True,
-                    tooltip=("1.0 uses pure albedo (flattest look); 0.5 blends them for balance."),
-                ),
-                io.Float.Input(
-                    "edge_influence",
-                    default=0.3,
-                    min=0.0,
-                    max=1.0,
-                    step=0.05,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Weight of lineart edges on color quantization. High values "
-                        "ensure color boundaries strictly follow edges."
-                    ),
-                ),
-                io.Boolean.Input(
-                    "use_auto_albedo",
-                    default=False,
-                    advanced=True,
-                    tooltip=(
-                        "(Advanced) Automatically estimates shadow-free colors using Retinex. "
-                        "Useful for portraits with harsh lighting. Only activates when no "
-                        "external Albedo map is wired."
-                    ),
-                ),
-                io.Int.Input(
-                    "smoothing_kernel_size",
-                    default=9,
-                    min=3,
-                    max=21,
-                    step=2,
-                    advanced=True,
-                    tooltip="(Advanced) Size of the majority smoothing kernel (must be odd).",
-                ),
-            ],
-            outputs=[
-                io.Image.Output(
-                    "IMAGE",
-                    tooltip=("The rendered template (colored, outline, or quantized) as a pixel image."),
-                ),
-                io.String.Output(
-                    "SVG",
-                    display_name="SVG Content",
-                    tooltip=(
-                        "High-quality vector SVG file, ideal for large-format printing or professional vector editing."
-                    ),
-                ),
-                io.Int.Output(
-                    "COLOR_COUNT",
-                    display_name="Color Count",
-                    tooltip="The total number of unique paint colors required for this template.",
-                ),
-            ],
+            inputs=cls._get_inputs(),
+            outputs=cls._get_outputs(),
         )
+
+    @classmethod
+    def _get_inputs(cls):
+        return [
+            io.Image.Input(
+                "image",
+                tooltip="The source image to transform. Supports batch processing.",
+            ),
+            io.Image.Input(
+                "segmentation",
+                optional=True,
+                tooltip=(
+                    "Optional segmentation map (e.g., from SAM or Mask2Former). This tells the "
+                    "node where objects start/end, preventing 'color bleeding' and helping to "
+                    "protect important details like faces or hands."
+                ),
+            ),
+            io.Image.Input(
+                "lineart",
+                optional=True,
+                tooltip=(
+                    "Optional edge map (e.g., from HED, SoftEdge, or Canny preprocessors). "
+                    "This tells the node where strong visual boundaries are, preventing "
+                    "color regions from bleeding across lines. Any single-channel edge "
+                    "map works — wire any 'comfyui_controlnet_aux' preprocessor here."
+                ),
+            ),
+            io.Float.Input(
+                "lineart_strength",
+                default=0.7,
+                min=0.0,
+                max=1.0,
+                step=0.05,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) How strongly the lineart edges influence region boundaries. "
+                    "Higher values create sharper boundaries at edges but may fragment regions."
+                ),
+            ),
+            io.Int.Input(
+                "num_colors",
+                default=24,
+                min=0,
+                max=40,
+                tooltip=(
+                    "How many unique paint pots you want. Use 0 for 'Auto' mode. "
+                    "Beginners should start with 8-12 colors. High-detail projects "
+                    "use 24-30."
+                ),
+            ),
+            io.Float.Input(
+                "simplification",
+                default=1.0,
+                min=0.5,
+                max=2.0,
+                step=0.1,
+                display_mode=io.NumberDisplay.slider,
+                tooltip=(
+                    "Controls how 'wiggly' the lines are. Higher values (1.5+) make it "
+                    "easier to paint but lose detail. Lower values (0.5-0.8) keep the "
+                    "photo's shapes more accurately but are much harder to paint."
+                ),
+            ),
+            io.Combo.Input(
+                "output_mode",
+                options=["colored", "outline", "quantized", "print_svg"],
+                default="colored",
+                tooltip=(
+                    "'colored': Template with colors and labels; 'outline': Line-art for "
+                    "printing; 'quantized': Posterized test image; 'print_svg': "
+                    "High-quality vector file for large printing."
+                ),
+            ),
+            io.Combo.Input(
+                "segmentation_format",
+                options=["auto", "grayscale", "rgb_packed"],
+                default="auto",
+                tooltip=(
+                    "How to interpret the segmentation map. 'auto' tries to detect. "
+                    "'grayscale': single-channel 0–N class labels (SAM, Sapiens). "
+                    "'rgb_packed': RGB image where each unique color = one class."
+                ),
+            ),
+            io.Combo.Input(
+                "preset",
+                options=["fast", "balanced", "portrait", "custom"],
+                default="balanced",
+                tooltip=(
+                    "Quick settings: 'portrait' protects faces; 'balanced' is a safe default; "
+                    "'fast' is for quick previews. Use 'custom' to unlock the manual "
+                    "advanced sliders below."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_ciede2000",
+                default=True,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Uses the industry-standard CIEDE2000 formula which matches "
+                    "colors how human eyes see them (best for skin tones) rather than "
+                    "simple math."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_palette_merge",
+                default=True,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Automatically combines very similar colors (e.g., two "
+                    "slightly different greys) into one to optimize your paint kit."
+                ),
+            ),
+            io.Float.Input(
+                "ciede2000_merge_thresh",
+                default=10.0,
+                min=2.0,
+                max=20.0,
+                step=0.5,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) How aggressive to be when merging similar colors. Higher "
+                    "values result in a smaller, more condensed palette. Default 10.0."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_thin_cleanup",
+                default=True,
+                advanced=True,
+                tooltip="(Advanced) Removes very thin regions that are difficult to paint.",
+            ),
+            io.Int.Input(
+                "min_region_width",
+                default=5,
+                min=2,
+                max=20,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Minimum pixel size for a region. Smaller bits will be "
+                    "merged into neighbors to prevent 'confetti' noise in your template."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_shared_borders",
+                default=True,
+                advanced=True,
+                tooltip=("(Advanced) Uses shared paths in SVG to prevent 'white gaps' between regions when rendering."),
+            ),
+            io.Combo.Input(
+                "label_mode",
+                options=["centroid", "polylabel"],
+                default="polylabel",
+                advanced=True,
+                tooltip=(
+                    "(Advanced) 'polylabel' ensures numbers are placed in the widest part "
+                    "of complex shapes; 'centroid' uses the exact mathematical center."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_bezier_smooth",
+                default=False,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Converts jagged pixel edges into smooth, flowing curves. "
+                    "Gives the template a professional, hand-drawn look."
+                ),
+            ),
+            io.Float.Input(
+                "subject_priority",
+                default=2.0,
+                min=1.0,
+                max=5.0,
+                step=0.1,
+                advanced=True,
+                tooltip="(Advanced) Weighting multiplier for the protected subject regions.",
+            ),
+            io.Float.Input(
+                "material_weight",
+                default=0.5,
+                min=0.0,
+                max=1.0,
+                step=0.1,
+                advanced=True,
+                tooltip=("1.0 uses pure albedo (flattest look); 0.5 blends them for balance."),
+            ),
+            io.Float.Input(
+                "edge_influence",
+                default=0.3,
+                min=0.0,
+                max=1.0,
+                step=0.05,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Weight of lineart edges on color quantization. High values "
+                    "ensure color boundaries strictly follow edges."
+                ),
+            ),
+            io.Boolean.Input(
+                "use_auto_albedo",
+                default=False,
+                advanced=True,
+                tooltip=(
+                    "(Advanced) Automatically estimates shadow-free colors using Retinex. "
+                    "Useful for portraits with harsh lighting. Only activates when no "
+                    "external Albedo map is wired."
+                ),
+            ),
+            io.Int.Input(
+                "smoothing_kernel_size",
+                default=9,
+                min=3,
+                max=21,
+                step=2,
+                advanced=True,
+                tooltip="(Advanced) Size of the majority smoothing kernel (must be odd).",
+            ),
+        ]
+
+    @classmethod
+    def _get_outputs(cls):
+        return [
+            io.Image.Output(
+                "IMAGE",
+                tooltip=("The rendered template (colored, outline, or quantized) as a pixel image."),
+            ),
+            io.String.Output(
+                "SVG",
+                display_name="SVG Content",
+                tooltip=(
+                    "High-quality vector SVG file, ideal for large-format printing or professional vector editing."
+                ),
+            ),
+            io.Int.Output(
+                "COLOR_COUNT",
+                display_name="Color Count",
+                tooltip="The total number of unique paint colors required for this template.",
+            ),
+        ]
 
     @classmethod
     def execute(
