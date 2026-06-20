@@ -9,7 +9,6 @@ from typing import cast
 import cv2
 import numpy as np
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
 
 from ..models import RegionData
 
@@ -164,7 +163,7 @@ class Vectorizer:
         Returns:
             Total area in square pixels
         """
-        return cast(float, sum(polygon.area for polygon in regions.values()))
+        return cast(float, sum([polygon.area for polygon in regions.values()]))
 
     def vectorize(self, region_data: RegionData, simplification: float) -> dict[int, Polygon]:
         """
