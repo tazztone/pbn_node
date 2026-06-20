@@ -483,7 +483,7 @@ class PaintByNumberNode(io.ComfyNode):
         lineart_np = cls._decode_lineart(lineart_t, invert_lineart)
         segmentation_np = cls._decode_segmentation(seg_t, segmentation_format)
 
-        has_perception = any(x is not None for x in [segmentation_np, lineart_np])
+        has_perception = segmentation_np is not None or lineart_np is not None
 
         if not has_perception:
             return None
