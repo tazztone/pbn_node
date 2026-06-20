@@ -108,3 +108,20 @@ class TestPBNRenderer:
         renderer.render(regions, labels, palette, 20, 10, mode="colored", region_colors=region_colors)
 
         assert captured_text == ["2", "2"], "Both regions should have the same label"
+
+    def test_hex_to_rgb(self):
+        # Basic hex with '#'
+        assert PBNRenderer._hex_to_rgb("#FF0000") == (255, 0, 0)
+        assert PBNRenderer._hex_to_rgb("#00FF00") == (0, 255, 0)
+        assert PBNRenderer._hex_to_rgb("#0000FF") == (0, 0, 255)
+
+        # Hex without '#'
+        assert PBNRenderer._hex_to_rgb("FFFFFF") == (255, 255, 255)
+        assert PBNRenderer._hex_to_rgb("000000") == (0, 0, 0)
+
+        # Mixed case
+        assert PBNRenderer._hex_to_rgb("#aB12eF") == (171, 18, 239)
+        assert PBNRenderer._hex_to_rgb("Ab12Ef") == (171, 18, 239)
+
+        # Edge case: checking exact values
+        assert PBNRenderer._hex_to_rgb("#123456") == (18, 52, 86)
