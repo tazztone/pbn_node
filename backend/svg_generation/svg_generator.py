@@ -175,7 +175,7 @@ class SVGGenerator:
         """
         grouped: dict[str, list[int]] = {}
 
-        for region_id in regions.keys():
+        for region_id in regions:
             # Map region ID to color
             if region_colors and region_id in region_colors:
                 color_idx = region_colors[region_id]
