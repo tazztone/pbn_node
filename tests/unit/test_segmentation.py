@@ -70,3 +70,23 @@ def test_segment_pipeline(quantized_mock):
     assert len(region_data.regions) > 0
     assert len(region_data.shared_borders) > 0
     assert region_data.adjacency_graph.number_of_nodes() > 0
+
+from unittest.mock import patch
+
+@pytest.mark.unit
+@patch('pbn_node.backend.segmentation.segmenter.Polygon')
+def test_extract_polygons_exception_handling(mock_polygon):
+    """Test that exceptions during Polygon creation are handled gracefully."""
+    # Setup simple segmentation with one region
+    segmented = np.array([[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]], dtype=np.int32)
+    region_colors = {1: 0}
+
+    # Make Polygon raise an exception
+    mock_polygon.side_effect = Exception("Simulated invalid geometry")
+
+    segmenter = RegionSegmenter()
+    regions, updated_colors = segmenter._extract_polygons(segmented, region_colors)
+
+    # Since the contour failed to become a Polygon, we should get no regions
+    assert len(regions) == 0
+    # updated_colors will still contain the original region_colors setup
