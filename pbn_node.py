@@ -551,10 +551,13 @@ class PaintByNumberNode(io.ComfyNode):
         filename = f"pbn_{content_hash}.svg"
         filepath = os.path.join(temp_dir, filename)
 
-        # Only write if file doesn't exist to avoid redundant I/O
-        if not os.path.exists(filepath):
-            with open(filepath, "w", encoding="utf-8") as f:
+        # Only write if file doesn't exist to avoid redundant I/O, safely handling TOCTOU
+        try:
+            fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
+        except FileExistsError:
+            pass
 
         return {"filename": filename, "subfolder": "", "type": "temp"}
 
