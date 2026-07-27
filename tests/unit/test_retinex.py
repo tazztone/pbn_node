@@ -59,3 +59,21 @@ def test_retinex_chrominance_stability():
 
     assert shift_a < 10
     assert shift_b < 10
+
+@pytest.mark.unit
+def test_multiscale_retinex_basic():
+    """Verify multiscale_retinex output shape and basic type properties."""
+    # Create a simple 64x64 BGR mock image
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 128
+
+    # Process it
+    result = multiscale_retinex(image)
+
+    # Check shape is preserved
+    assert result.shape == image.shape
+
+    # Check dtype is preserved
+    assert result.dtype == image.dtype
+
+    # Ensure it's not empty/all zeros
+    assert np.any(result > 0)
