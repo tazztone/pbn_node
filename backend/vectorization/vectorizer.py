@@ -182,16 +182,17 @@ class Vectorizer:
 
         simplified_regions = {}
 
+        # Scale tolerance for resolution independence.
+        # Baseline: simplification=1.0 -> ~1.0-2.0 area units per 1MP
+        total_area = self.calculate_total_area(region_data.regions)
+        tolerance_area = max(0.1, (simplification**2) * (total_area / 500000.0))
+
         for region_id, polygon in region_data.regions.items():
             try:
                 # Get polygon exterior coordinates
                 coords = np.array(polygon.exterior.coords)
 
                 # Apply Visvalingam-Whyatt simplification
-                # Scale tolerance for resolution independence.
-                # Baseline: simplification=1.0 -> ~1.0-2.0 area units per 1MP
-                total_area = self.calculate_total_area(region_data.regions)
-                tolerance_area = max(0.1, (simplification**2) * (total_area / 500000.0))
                 simplified_coords = self.visvalingam_whyatt(coords, tolerance_area)
 
                 # Bézier path smoothing
