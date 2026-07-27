@@ -48,3 +48,25 @@ class TestLabelPlacer:
         poly = Polygon()
         assert poly.is_empty is True
         assert placer.should_skip_label(poly) is True
+
+    def test_inscribed_circle_radius_fallback(self, monkeypatch):
+        """Test fallback to area-based estimation when polylabel fails."""
+        import numpy as np
+
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+
+        # Mock polylabel to fail
+        def mock_polylabel(*args, **kwargs):
+            raise Exception("Mocked polylabel failure")
+
+        monkeypatch.setattr("pbn_node.backend.labeling.label_placer.polylabel", mock_polylabel)
+
+        # Calculate expected fallback value based on area
+        # For a 20x20 square, area = 400
+        # estimated radius = sqrt(400 / pi)
+        expected_radius = float(np.sqrt(poly.area / np.pi))
+
+        radius = placer.inscribed_circle_radius(poly)
+
+        assert np.isclose(radius, expected_radius)
