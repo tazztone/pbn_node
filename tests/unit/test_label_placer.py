@@ -48,3 +48,50 @@ class TestLabelPlacer:
         poly = Polygon()
         assert poly.is_empty is True
         assert placer.should_skip_label(poly) is True
+
+    def test_inscribed_circle_radius_square(self):
+        """Test inscribed circle radius for a perfect square."""
+        placer = LabelPlacer()
+        # 10x10 square
+        poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
+        radius = placer.inscribed_circle_radius(poly)
+        # Expected radius is half the side length: 5
+        assert radius == pytest.approx(5.0, abs=1e-1)
+
+    def test_inscribed_circle_radius_rectangle(self):
+        """Test inscribed circle radius for a rectangle."""
+        placer = LabelPlacer()
+        # 20x10 rectangle
+        poly = Polygon([(0, 0), (20, 0), (20, 10), (0, 10)])
+        radius = placer.inscribed_circle_radius(poly)
+        # Expected radius is half the shorter side length: 5
+        assert radius == pytest.approx(5.0, abs=1e-1)
+
+    def test_inscribed_circle_radius_invalid_polygon(self):
+        """Test inscribed circle radius for an invalid polygon."""
+        placer = LabelPlacer()
+        # Self-intersecting "hourglass" polygon
+        poly = Polygon([(0, 0), (10, 10), (0, 10), (10, 0)])
+        # Validates that invalid geometries don't cause crashes, and fallback logic applies
+        # Without mocking polylabel, polylabel might still calculate a radius or error out.
+        # Ensure it returns a non-negative float
+        radius = placer.inscribed_circle_radius(poly)
+        assert isinstance(radius, float)
+        assert radius >= 0
+
+    def test_inscribed_circle_radius_fallback(self, mocker):
+        """Test fallback logic when polylabel fails."""
+        placer = LabelPlacer()
+        # 10x10 square, area = 100
+        poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
+
+        # Mock polylabel to raise an exception
+        mocker.patch("pbn_node.backend.labeling.label_placer.polylabel", side_effect=Exception("Polylabel error"))
+
+        import math
+        # Fallback calculates: sqrt(area / pi) -> sqrt(100 / pi)
+        expected_fallback_radius = math.sqrt(poly.area / math.pi)
+
+        radius = placer.inscribed_circle_radius(poly)
+
+        assert radius == pytest.approx(expected_fallback_radius, abs=1e-5)
