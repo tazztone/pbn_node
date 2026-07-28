@@ -1,6 +1,7 @@
 import pytest
-from pbn_node.backend.labeling.label_placer import LabelPlacer
 from shapely.geometry import Polygon
+
+from pbn_node.backend.labeling.label_placer import LabelPlacer
 
 
 @pytest.mark.unit
@@ -49,8 +50,6 @@ class TestLabelPlacer:
         assert poly.is_empty is True
         assert placer.should_skip_label(poly) is True
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     def test_inscribed_circle_radius_square(self):
         """Test inscribed circle radius for a perfect square."""
         placer = LabelPlacer()
@@ -81,16 +80,20 @@ class TestLabelPlacer:
         assert isinstance(radius, float)
         assert radius >= 0
 
-    def test_inscribed_circle_radius_fallback(self, mocker):
+    def test_inscribed_circle_radius_fallback(self, monkeypatch):
         """Test fallback logic when polylabel fails."""
         placer = LabelPlacer()
         # 10x10 square, area = 100
         poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
 
         # Mock polylabel to raise an exception
-        mocker.patch("pbn_node.backend.labeling.label_placer.polylabel", side_effect=Exception("Polylabel error"))
+        def raise_err(*args, **kwargs):
+            raise Exception("Polylabel error")
+
+        monkeypatch.setattr("pbn_node.backend.labeling.label_placer.polylabel", raise_err)
 
         import math
+
         # Fallback calculates: sqrt(area / pi) -> sqrt(100 / pi)
         expected_fallback_radius = math.sqrt(poly.area / math.pi)
 
@@ -98,7 +101,7 @@ class TestLabelPlacer:
 
         assert radius == pytest.approx(expected_fallback_radius, abs=1e-5)
 
-    def test_calculate_font_size_standard(self, mocker):
+    def test_calculate_font_size_standard(self, monkeypatch):
         """Test standard font size calculation (no clamping)."""
         placer = LabelPlacer()
         poly = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
@@ -106,12 +109,12 @@ class TestLabelPlacer:
 
         # Mock inscribed_circle_radius to return 25
         # 25 * 0.6 = 15, which is between min (8) and max (24)
-        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=25.0)
+        monkeypatch.setattr(placer, "inscribed_circle_radius", lambda p: 25.0)
 
         size = placer.calculate_font_size(poly)
         assert size == 15
 
-    def test_calculate_font_size_clamped_min(self, mocker):
+    def test_calculate_font_size_clamped_min(self, monkeypatch):
         """Test that font size is clamped to min_font_size (8) for medium regions."""
         placer = LabelPlacer()
         poly = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
@@ -119,12 +122,12 @@ class TestLabelPlacer:
 
         # Mock inscribed_circle_radius to return 10
         # 10 * 0.6 = 6, which should be clamped to min_font_size (8)
-        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=10.0)
+        monkeypatch.setattr(placer, "inscribed_circle_radius", lambda p: 10.0)
 
         size = placer.calculate_font_size(poly)
         assert size == 8
 
-    def test_calculate_font_size_clamped_max(self, mocker):
+    def test_calculate_font_size_clamped_max(self, monkeypatch):
         """Test that font size is clamped to max_font_size (24) for large regions."""
         placer = LabelPlacer()
         poly = Polygon([(0, 0), (50, 0), (50, 50), (0, 50)])
@@ -132,12 +135,12 @@ class TestLabelPlacer:
 
         # Mock inscribed_circle_radius to return 100
         # 100 * 0.6 = 60, which should be clamped to max_font_size (24)
-        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=100.0)
+        monkeypatch.setattr(placer, "inscribed_circle_radius", lambda p: 100.0)
 
         size = placer.calculate_font_size(poly)
         assert size == 24
 
-    def test_calculate_font_size_tiny_region(self, mocker):
+    def test_calculate_font_size_tiny_region(self, monkeypatch):
         """Test that tiny regions (area < 100) allow dropping to tiny_font_size (5)."""
         placer = LabelPlacer()
         # Create a tiny polygon, area = 81
@@ -146,12 +149,12 @@ class TestLabelPlacer:
 
         # Mock inscribed_circle_radius to return 10
         # 10 * 0.6 = 6, normally clamped to 8, but tiny_font_size is 5
-        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=10.0)
+        monkeypatch.setattr(placer, "inscribed_circle_radius", lambda p: 10.0)
 
         size = placer.calculate_font_size(poly)
         assert size == 6
 
-    def test_calculate_font_size_tiny_region_clamped(self, mocker):
+    def test_calculate_font_size_tiny_region_clamped(self, monkeypatch):
         """Test that tiny regions still clamp to tiny_font_size (5) at the lower end."""
         placer = LabelPlacer()
         # Create a tiny polygon, area = 81
@@ -160,7 +163,7 @@ class TestLabelPlacer:
 
         # Mock inscribed_circle_radius to return 5
         # 5 * 0.6 = 3, clamped to tiny_font_size (5)
-        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=5.0)
+        monkeypatch.setattr(placer, "inscribed_circle_radius", lambda p: 5.0)
 
         size = placer.calculate_font_size(poly)
         assert size == 5
@@ -184,4 +187,3 @@ class TestLabelPlacer:
         # Verify polylabel placement is inside
         point = placer.polylabel_placement(poly)
         assert poly.contains(point)
-
