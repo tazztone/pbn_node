@@ -11,6 +11,14 @@ def test_detect_monochrome():
     img_gray = np.ones((100, 100, 3), dtype=np.uint8) * 128
     assert quantizer.detect_monochrome(img_gray) is True
 
+    # Pure white
+    img_white = np.ones((100, 100, 3), dtype=np.uint8) * 255
+    assert quantizer.detect_monochrome(img_white) is True
+
+    # Pure black
+    img_black = np.zeros((100, 100, 3), dtype=np.uint8)
+    assert quantizer.detect_monochrome(img_black) is True
+
     # Clearly colored
     img_color = np.zeros((100, 100, 3), dtype=np.uint8)
     img_color[:50, :50] = [255, 0, 0]
