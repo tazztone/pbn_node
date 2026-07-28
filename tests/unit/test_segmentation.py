@@ -62,6 +62,31 @@ def test_build_adjacency_graph():
 
 
 @pytest.mark.unit
+def test_build_adjacency_graph_single_region():
+    # 2x2 image with a single region
+    regions = np.array([[1, 1], [1, 1]], dtype=np.int32)
+
+    segmenter = RegionSegmenter()
+    graph = segmenter.build_adjacency_graph(regions)
+
+    assert graph.number_of_nodes() == 1
+    assert graph.has_node(1)
+    assert graph.number_of_edges() == 0
+
+
+@pytest.mark.unit
+def test_build_adjacency_graph_empty():
+    # 2x2 empty region (all 0s, typical for background/invalid)
+    regions = np.zeros((2, 2), dtype=np.int32)
+
+    segmenter = RegionSegmenter()
+    graph = segmenter.build_adjacency_graph(regions)
+
+    assert graph.number_of_nodes() == 0
+    assert graph.number_of_edges() == 0
+
+
+@pytest.mark.unit
 def test_segment_pipeline(quantized_mock):
     img, colors = quantized_mock
     segmenter = RegionSegmenter()
