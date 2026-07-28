@@ -65,6 +65,12 @@ class TestVectorizer:
         total_area = vectorizer.calculate_total_area(regions)
         assert total_area == 125.0
 
+    def test_calculate_total_area_empty(self):
+        vectorizer = Vectorizer()
+        regions = {}
+        total_area = vectorizer.calculate_total_area(regions)
+        assert total_area == 0.0
+
     def test_vectorize(self):
         vectorizer = Vectorizer(use_bezier_smooth=False)
 
