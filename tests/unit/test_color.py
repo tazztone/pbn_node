@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from pbn_node.backend.utils.color import cv_to_std_lab
 
 

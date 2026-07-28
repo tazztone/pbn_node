@@ -35,14 +35,14 @@ class ColorQuantizer:
         self.ciede2000_merge_thresh = ciede2000_merge_thresh
         self.use_ciede2000 = use_ciede2000
 
-    def _blend_with_albedo(
-        self, pixels: np.ndarray, albedo: np.ndarray, material_weight: float, h: int, w: int
-    ) -> np.ndarray:
+    def _blend_with_albedo(self, lab_image: np.ndarray, albedo: np.ndarray, material_weight: float) -> np.ndarray:
         """Helper to blend LAB pixels with albedo pixels."""
+        h, w = lab_image.shape[:2]
         if albedo.shape[:2] != (h, w):
             albedo = cv2.resize(albedo, (w, h), interpolation=cv2.INTER_LINEAR)
         albedo_lab = cv2.cvtColor(albedo, cv2.COLOR_BGR2LAB).astype(np.float32)
         albedo_pixels = albedo_lab.reshape(-1, 3)
+        pixels = lab_image.reshape(-1, 3)
         return material_weight * albedo_pixels + (1.0 - material_weight) * pixels
 
     def _centers_to_palette(self, centers_lab: np.ndarray) -> ColorPalette:
@@ -69,7 +69,7 @@ class ColorQuantizer:
         pixels = lab_image.reshape(-1, 3)
 
         if albedo is not None:
-            fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w)
+            fit_pixels = self._blend_with_albedo(lab_image, albedo, material_weight)
         else:
             fit_pixels = pixels
 
@@ -175,7 +175,7 @@ class ColorQuantizer:
         lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
         pixels = lab_image.reshape(-1, 3)
 
-        fit_pixels = self._blend_with_albedo(pixels, albedo, material_weight, h, w) if albedo is not None else pixels
+        fit_pixels = self._blend_with_albedo(lab_image, albedo, material_weight) if albedo is not None else pixels
 
         if self.use_ciede2000:
             std_pixels = cv_to_std_lab(fit_pixels)
@@ -340,9 +340,7 @@ class ColorQuantizer:
             lab_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2LAB).astype(np.float32)
             h, w = lab_image.shape[:2]
             pixels = lab_image.reshape(-1, 3)
-            fit_pixels = (
-                self._blend_with_albedo(pixels, albedo, material_weight, h, w) if albedo is not None else pixels
-            )
+            fit_pixels = self._blend_with_albedo(lab_image, albedo, material_weight) if albedo is not None else pixels
 
             if self.use_ciede2000:
                 std_pixels = cv_to_std_lab(fit_pixels)

@@ -1,5 +1,5 @@
 import timeit
-import time
+
 
 class MockColorPalette:
     def __init__(self, hex_colors):
@@ -33,7 +33,7 @@ class MockGeneratorNoKeys:
             grouped[color_hex].append(region_id)
         return grouped
 
-regions = {i: None for i in range(100000)}
+regions = dict.fromkeys(range(100000))
 colors = MockColorPalette(hex_colors=["#000000", "#FFFFFF", "#FF0000"])
 region_colors = {i: i % 3 for i in range(100000)}
 
