@@ -50,6 +50,7 @@ class TestLabelPlacer:
         assert placer.should_skip_label(poly) is True
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def test_inscribed_circle_radius_square(self):
         """Test inscribed circle radius for a perfect square."""
         placer = LabelPlacer()
@@ -163,4 +164,24 @@ class TestLabelPlacer:
 
         size = placer.calculate_font_size(poly)
         assert size == 5
+
+    def test_polylabel_placement_inside_polygon(self):
+        """Test that polylabel_placement returns a point inside an L-shaped polygon,
+        where the centroid would be outside."""
+        placer = LabelPlacer()
+        # L-shaped polygon
+        # (0,10) ---- (2,10)
+        #   |           |
+        #   |         (2,2) ---- (10,2)
+        #   |                      |
+        # (0,0) ---------------- (10,0)
+        poly = Polygon([(0, 0), (10, 0), (10, 2), (2, 2), (2, 10), (0, 10)])
+
+        # Verify the centroid is outside
+        centroid = poly.centroid
+        assert not poly.contains(centroid)
+
+        # Verify polylabel placement is inside
+        point = placer.polylabel_placement(poly)
+        assert poly.contains(point)
 
