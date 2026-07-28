@@ -49,6 +49,7 @@ class TestLabelPlacer:
         assert poly.is_empty is True
         assert placer.should_skip_label(poly) is True
 
+<<<<<<< HEAD
     def test_inscribed_circle_radius_square(self):
         """Test inscribed circle radius for a perfect square."""
         placer = LabelPlacer()
@@ -95,3 +96,71 @@ class TestLabelPlacer:
         radius = placer.inscribed_circle_radius(poly)
 
         assert radius == pytest.approx(expected_fallback_radius, abs=1e-5)
+
+    def test_calculate_font_size_standard(self, mocker):
+        """Test standard font size calculation (no clamping)."""
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+        assert poly.area == 400
+
+        # Mock inscribed_circle_radius to return 25
+        # 25 * 0.6 = 15, which is between min (8) and max (24)
+        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=25.0)
+
+        size = placer.calculate_font_size(poly)
+        assert size == 15
+
+    def test_calculate_font_size_clamped_min(self, mocker):
+        """Test that font size is clamped to min_font_size (8) for medium regions."""
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+        assert poly.area == 400
+
+        # Mock inscribed_circle_radius to return 10
+        # 10 * 0.6 = 6, which should be clamped to min_font_size (8)
+        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=10.0)
+
+        size = placer.calculate_font_size(poly)
+        assert size == 8
+
+    def test_calculate_font_size_clamped_max(self, mocker):
+        """Test that font size is clamped to max_font_size (24) for large regions."""
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (50, 0), (50, 50), (0, 50)])
+        assert poly.area == 2500
+
+        # Mock inscribed_circle_radius to return 100
+        # 100 * 0.6 = 60, which should be clamped to max_font_size (24)
+        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=100.0)
+
+        size = placer.calculate_font_size(poly)
+        assert size == 24
+
+    def test_calculate_font_size_tiny_region(self, mocker):
+        """Test that tiny regions (area < 100) allow dropping to tiny_font_size (5)."""
+        placer = LabelPlacer()
+        # Create a tiny polygon, area = 81
+        poly = Polygon([(0, 0), (9, 0), (9, 9), (0, 9)])
+        assert poly.area == 81
+
+        # Mock inscribed_circle_radius to return 10
+        # 10 * 0.6 = 6, normally clamped to 8, but tiny_font_size is 5
+        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=10.0)
+
+        size = placer.calculate_font_size(poly)
+        assert size == 6
+
+    def test_calculate_font_size_tiny_region_clamped(self, mocker):
+        """Test that tiny regions still clamp to tiny_font_size (5) at the lower end."""
+        placer = LabelPlacer()
+        # Create a tiny polygon, area = 81
+        poly = Polygon([(0, 0), (9, 0), (9, 9), (0, 9)])
+        assert poly.area == 81
+
+        # Mock inscribed_circle_radius to return 5
+        # 5 * 0.6 = 3, clamped to tiny_font_size (5)
+        mocker.patch.object(placer, 'inscribed_circle_radius', return_value=5.0)
+
+        size = placer.calculate_font_size(poly)
+        assert size == 5
+
