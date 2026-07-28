@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 from pbn_node.backend.models import RegionData
@@ -117,3 +119,16 @@ class TestVectorizer:
             assert len(smoothed) > 4
         else:
             assert np.array_equal(smoothed, coords)
+
+    def test_apply_bezier_smoothing_exception(self):
+        if not _HAS_BEZIER:
+            pytest.skip("bezier module not available")
+        vectorizer = Vectorizer(use_bezier_smooth=True)
+        coords = np.array([[0, 0], [10, 0], [10, 10], [0, 10]])
+
+        with patch("pbn_node.backend.vectorization.vectorizer.bezier.Curve", side_effect=Exception("Test Exception")):
+            smoothed = vectorizer._apply_bezier_smoothing(coords, num_points_per_curve=5)
+
+        assert len(smoothed) == 7
+        expected_coords = np.array([[0, 0], [10, 0], [10, 10], [0, 10], [0, 0], [10, 0], [0, 0]])
+        assert np.array_equal(smoothed, expected_coords)
