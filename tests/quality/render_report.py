@@ -256,8 +256,7 @@ if __name__ == "__main__":
     if args.llm_review:
         api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
-            print("ERROR: --api-key or OPENROUTER_API_KEY env var required for --llm-review")
-            sys.exit(1)
+            raise ValueError("ERROR: --api-key or OPENROUTER_API_KEY env var required for --llm-review")
         reviewer = LLMReviewer(api_key=api_key, api_base=args.api_base, model=args.model)
 
     runs_config = load_runs_config(args.config)
