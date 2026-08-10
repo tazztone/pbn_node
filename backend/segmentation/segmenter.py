@@ -397,11 +397,11 @@ class RegionSegmenter:
             left_ids = regions[:, :-1][h_adj]
             right_ids = regions[:, 1:][h_adj]
 
-            for i in range(len(y_coords)):
-                pair = cast(tuple[int, int], tuple(sorted([int(left_ids[i]), int(right_ids[i])])))
+            for y, x, left_id, right_id in zip(y_coords, x_coords, left_ids, right_ids, strict=True):
+                pair = cast(tuple[int, int], tuple(sorted([int(left_id), int(right_id)])))
                 if pair not in border_segments:
                     border_segments[pair] = []
-                border_segments[pair].append((float(x_coords[i] + 0.5), float(y_coords[i])))
+                border_segments[pair].append((float(x + 0.5), float(y)))
 
         # Scan vertically for borders
         v_adj = (regions[:-1, :] != regions[1:, :]) & (regions[:-1, :] > 0) & (regions[1:, :] > 0)
@@ -410,11 +410,11 @@ class RegionSegmenter:
             top_ids = regions[:-1, :][v_adj]
             bottom_ids = regions[1:, :][v_adj]
 
-            for i in range(len(y_coords)):
-                pair = cast(tuple[int, int], tuple(sorted([int(top_ids[i]), int(bottom_ids[i])])))
+            for y, x, top_id, bottom_id in zip(y_coords, x_coords, top_ids, bottom_ids, strict=True):
+                pair = cast(tuple[int, int], tuple(sorted([int(top_id), int(bottom_id)])))
                 if pair not in border_segments:
                     border_segments[pair] = []
-                border_segments[pair].append((float(x_coords[i]), float(y_coords[i] + 0.5)))
+                border_segments[pair].append((float(x), float(y + 0.5)))
 
         # Convert border points to LineStrings by grouping into contiguous components
         for (region1, region2), points in border_segments.items():
