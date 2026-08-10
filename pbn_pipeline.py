@@ -191,7 +191,7 @@ class ImageProcessor:
         Renumber regions to have consecutive IDs starting from 1,
         preserving their color identity.
         """
-        sorted_ids = sorted(regions.keys())
+        sorted_ids = sorted(regions)
         renumbered_regions = {new_id: regions[old_id] for new_id, old_id in enumerate(sorted_ids, 1)}
         renumbered_colors = {
             new_id: region_colors[old_id] for new_id, old_id in enumerate(sorted_ids, 1) if old_id in region_colors
