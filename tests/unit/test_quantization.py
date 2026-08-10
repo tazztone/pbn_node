@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 from pbn_node.backend.quantization.quantizer import ColorQuantizer
@@ -35,6 +37,21 @@ def test_quantize_fixed_k(sample_image_np):
     assert palette.color_count == k
     assert len(palette.hex_colors) == k
     assert quantized.shape == sample_image_np.shape
+
+
+@pytest.mark.unit
+def test_auto_select_k_exception(sample_image_np):
+    quantizer = ColorQuantizer()
+
+    # Bypass monochrome check to reach KneeLocator
+    quantizer.detect_monochrome = lambda img: False
+
+    # Mock KneeLocator to raise an Exception
+    with patch("pbn_node.backend.quantization.quantizer.KneeLocator", side_effect=Exception("Test Exception")):
+        k = quantizer.auto_select_k(sample_image_np)
+
+    expected_k = min((quantizer.min_k + quantizer.max_k) // 2, quantizer.k_cap)
+    assert k == expected_k
 
 
 @pytest.mark.unit
