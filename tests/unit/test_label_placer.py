@@ -187,3 +187,55 @@ class TestLabelPlacer:
         # Verify polylabel placement is inside
         point = placer.polylabel_placement(poly)
         assert poly.contains(point)
+
+    def test_polylabel_placement_exception_fallback(self, monkeypatch):
+        """Test that polylabel_placement halves precision when polylabel raises an Exception."""
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
+
+        calls = []
+
+        # Create a mock polylabel function that raises an Exception on the first call,
+        # but succeeds on subsequent calls.
+        import shapely.ops
+
+        def mock_polylabel(polygon, tolerance):
+            calls.append(tolerance)
+            if len(calls) == 1:
+                raise Exception("First call fails")
+            # Succeed on the second call
+            return shapely.ops.polylabel(polygon, tolerance=tolerance)
+
+        monkeypatch.setattr("pbn_node.backend.labeling.label_placer.polylabel", mock_polylabel)
+
+        # Ensure we start with precision 1.0
+        placer.initial_precision = 1.0
+        point = placer.polylabel_placement(poly, precision=1.0)
+
+        # Assert polylabel was called first with tolerance 1.0, then 0.5
+        assert len(calls) == 2
+        assert calls[0] == 1.0
+        assert calls[1] == 0.5
+
+        # Assert a valid point was returned (fallback point is inside the polygon)
+        assert poly.contains(point)
+
+    def test_polylabel_placement_all_fail_fallback(self, monkeypatch):
+        """Test that polylabel_placement falls back to centroid if polylabel always fails."""
+        placer = LabelPlacer()
+        poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
+
+        # Create a mock polylabel function that always raises an Exception
+        def mock_polylabel_always_fails(polygon, tolerance):
+            raise Exception("Polylabel always fails")
+
+        monkeypatch.setattr("pbn_node.backend.labeling.label_placer.polylabel", mock_polylabel_always_fails)
+
+        # Ensure we start with precision 1.0
+        placer.initial_precision = 1.0
+        point = placer.polylabel_placement(poly, precision=1.0)
+
+        # Expected fallback is centroid
+        expected_centroid = poly.centroid
+        assert point.x == expected_centroid.x
+        assert point.y == expected_centroid.y
