@@ -302,9 +302,7 @@ class RegionSegmenter:
         neighbor_votes: dict[int, float] = {}  # (value) -> min_edge_weight
 
         # Check all boundary pixels of the region
-        for i in range(len(x_coords)):
-            x, y = x_coords[i], y_coords[i]
-
+        for x, y in zip(x_coords, y_coords):
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < w and 0 <= ny < h:
