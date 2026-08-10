@@ -69,13 +69,13 @@ class LabelPlacer:
         if not working_polygon.is_valid or working_polygon.is_empty:
             working_polygon = polygon  # fall back to original if simplification breaks it
 
-        start_time = time.time()
+        start_time = time.perf_counter()
         current_precision = precision
 
         while current_precision >= self.min_precision:
             try:
                 # Check timeout
-                elapsed_ms = (time.time() - start_time) * 1000
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
                 if elapsed_ms > self.timeout_ms:
                     # Timeout - fall back to centroid
                     return working_polygon.centroid
