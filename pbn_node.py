@@ -553,8 +553,7 @@ class PaintByNumberNode(io.ComfyNode):
 
         # Only write if file doesn't exist to avoid redundant I/O, safely handling TOCTOU
         try:
-            fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
+            with open(filepath, "x", encoding="utf-8") as f:
                 f.write(content)
         except FileExistsError:
             pass
